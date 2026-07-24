@@ -1,0 +1,15 @@
+# Model / binary files
+*.bin
+*.tflite
+*.onnx
+*.ncnn.bin
+*.ncnn.param
+
+# Audio files
+*.wav
+
+# Python cache
+__pycache__/
+
+# macOS
+.DS_Store
