@@ -1,15 +1,41 @@
-# Model / binary files
+# ---- Model / Large Binary Files ----
 *.bin
 *.tflite
 *.onnx
 *.ncnn.bin
 *.ncnn.param
+best_ncnn_model/
 
-# Audio files
+# ---- Audio Files ----
 *.wav
+*.mp3
+*.ogg
 
-# Python cache
+# ---- Python ----
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
 
-# macOS
+# ---- Virtual Environment ----
+venv/
+.env/
+
+# ---- macOS ----
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Logs ----
+*.log
