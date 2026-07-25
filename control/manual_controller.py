@@ -6,16 +6,12 @@ import time
 
 
 class ManualController:
-    """Manual control handling WASD and combination key commands."""
+    """Manual control handling WASD and combination key commands with fine-tuned motor compensation."""
 
-    def __init__(self, forward_pwm=200, backward_pwm=100, pivot_pwm=120, inner_pwm=100):
+    def __init__(self):
         self.lock = threading.Lock()
         self.command = (0, 0)
         self.reason = "manual standby"
-        self.forward_pwm = forward_pwm
-        self.backward_pwm = backward_pwm
-        self.pivot_pwm = pivot_pwm
-        self.inner_pwm = inner_pwm
         self.last_cmd_at = time.monotonic()
 
     def handle_command(self, cmd):
@@ -23,40 +19,36 @@ class ManualController:
         with self.lock:
             now = time.monotonic()
             self.last_cmd_at = now
-            f_pwm = self.forward_pwm   # 200
-            b_pwm = self.backward_pwm  # 100
-            pivot = self.pivot_pwm     # 120
-            inner = self.inner_pwm     # 100
 
-            # 組合鍵判斷
+            # 組合鍵判斷 (微調左右輪補償)
             if cmd in ("WD", "DW"):
-                self.command = (f_pwm, inner)
-                self.reason = "manual forward-right (WD)"
+                self.command = (200, 80)          # 組合鍵右拐 200, 80
+                self.reason = "manual forward-right (WD: 200, 80)"
             elif cmd in ("WA", "AW"):
-                self.command = (inner, f_pwm)
-                self.reason = "manual forward-left (WA)"
+                self.command = (80, 200)          # 組合鍵左拐 80, 200
+                self.reason = "manual forward-left (WA: 80, 200)"
             elif cmd in ("SD", "DS"):
-                self.command = (-b_pwm, -int(inner * 0.5))
-                self.reason = "manual backward-right (SD)"
+                self.command = (-150, -70)        # 組合鍵右後 -150, -70
+                self.reason = "manual backward-right (SD: -150, -70)"
             elif cmd in ("SA", "AS"):
-                self.command = (-int(inner * 0.5), -b_pwm)
-                self.reason = "manual backward-left (SA)"
+                self.command = (-80, -150)        # 組合鍵左後 -80, -150
+                self.reason = "manual backward-left (SA: -80, -150)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
-                self.command = (f_pwm, f_pwm)     # (200, 200)
-                self.reason = "manual forward (W)"
+                self.command = (200, 200)         # 直向前進 200, 200
+                self.reason = "manual forward (W: 200, 200)"
             elif cmd in ("S", "BACKWARD"):
-                self.command = (-b_pwm, -b_pwm)   # (-100, -100)
-                self.reason = "manual backward (S)"
+                self.command = (-150, -150)       # 直線後退 -150, -150
+                self.reason = "manual backward (S: -150, -150)"
             elif cmd in ("A", "LEFT"):
-                self.command = (-pivot, pivot)    # (-120, 120)
-                self.reason = "manual turn left (A)"
+                self.command = (-140, 140)        # 左拐 -140, 140
+                self.reason = "manual turn left (A: -140, 140)"
             elif cmd in ("D", "RIGHT"):
-                self.command = (pivot, -pivot)    # (120, -120)
-                self.reason = "manual turn right (D)"
+                self.command = (150, -150)        # 右拐 150, -150
+                self.reason = "manual turn right (D: 150, -150)"
             elif cmd in ("B", "STOP", "BRAKE"):
                 self.command = (0, 0)
-                self.reason = "manual brake (B)"
+                self.reason = "manual brake (B: 0, 0)"
             return True
 
     def emergency_stop(self):

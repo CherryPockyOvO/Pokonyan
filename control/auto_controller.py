@@ -31,9 +31,6 @@ class AutoController:
 
         # 寵物自由漫遊與 50cm 超聲波自動避障控制器
         self.pet_wander = PetWanderController(
-            forward_pwm=self.forward_pwm,
-            pivot_pwm=self.pivot_pwm,
-            inner_pwm=self.inner_pwm,
             obstacle_dist_cm=50.0,
             clear_dist_cm=55.0,
         )

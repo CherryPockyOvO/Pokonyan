@@ -13,21 +13,15 @@ class PetWanderController:
     1. Randomly executes non-backward forward actions (W, WA, WD, A, D) and short pauses (B).
     2. Pause duration is kept short (0.4 ~ 0.9s) so it moves around like a pet.
     3. Excludes backward commands (S, SA, SD).
-    4. Automatically avoids obstacles at 50cm using ONLY left (A) / right (D) spins (no combination keys).
+    4. Automatically avoids obstacles at 50cm using ONLY left (A: -140, 140) / right (D: 150, -150) spins.
     """
 
     def __init__(
         self,
-        forward_pwm=200,
-        pivot_pwm=120,
-        inner_pwm=100,
         obstacle_dist_cm=50.0,
         clear_dist_cm=55.0,
     ):
         self.lock = threading.Lock()
-        self.forward_pwm = forward_pwm
-        self.pivot_pwm = pivot_pwm
-        self.inner_pwm = inner_pwm
         self.obstacle_dist_cm = obstacle_dist_cm
         self.clear_dist_cm = clear_dist_cm
 
@@ -42,40 +36,40 @@ class PetWanderController:
         # 定義可選的非後退運動動作及其隨機持續時間 (秒) 與 PWM (左, 右)
         self.actions = {
             "W": {
-                "pwm": (self.forward_pwm, self.forward_pwm),  # (200, 200)
+                "pwm": (200, 200),        # 直前 (200, 200)
                 "duration": (1.5, 3.5),
                 "weight": 40,
-                "name": "Forward (W)",
+                "name": "Forward (W: 200, 200)",
             },
             "WA": {
-                "pwm": (self.inner_pwm, self.forward_pwm),    # (100, 200)
+                "pwm": (80, 200),         # 組合鍵左拐 (80, 200)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Left (WA)",
+                "name": "Forward-Left (WA: 80, 200)",
             },
             "WD": {
-                "pwm": (self.forward_pwm, self.inner_pwm),    # (200, 100)
+                "pwm": (200, 80),         # 組合鍵右拐 (200, 80)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Right (WD)",
+                "name": "Forward-Right (WD: 200, 80)",
             },
             "A": {
-                "pwm": (-self.pivot_pwm, self.pivot_pwm),     # (-120, 120)
+                "pwm": (-140, 140),       # 左拐 (-140, 140)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Left (A)",
+                "name": "Turn-Left (A: -140, 140)",
             },
             "D": {
-                "pwm": (self.pivot_pwm, -self.pivot_pwm),     # (120, -120)
+                "pwm": (150, -150),       # 右拐 (150, -150)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Right (D)",
+                "name": "Turn-Right (D: 150, -150)",
             },
             "B": {
                 "pwm": (0, 0),
                 "duration": (0.4, 0.9),  # 停頓時間短，符合寵物活潑移動
                 "weight": 4,
-                "name": "Short Pause (B)",
+                "name": "Short Pause (B: 0, 0)",
             },
         }
 
@@ -118,11 +112,11 @@ class PetWanderController:
             )
 
             # -------------------------------------------------------------
-            # 1. 50cm 超聲波自動避障模式 (單純左轉 A 或右轉 D 避障，不用組合鍵)
+            # 1. 50cm 超聲波自動避障模式 (單純左轉 A: -140,140 或右轉 D: 150,-150)
             # -------------------------------------------------------------
             if is_obstacle or self.mode == "AVOID_OBSTACLE":
                 if self.mode != "AVOID_OBSTACLE":
-                    # 剛剛觸發 50cm 避障：隨機選擇原地左轉 (A: -120, 120) 或右轉 (D: 120, -120)
+                    # 剛剛觸發 50cm 避障：隨機選擇左轉 A (-140, 140) 或右轉 D (150, -150)
                     self.mode = "AVOID_OBSTACLE"
                     self.avoid_direction = random.choice(["A", "D"])
                     self.avoid_start_time = now
@@ -139,13 +133,13 @@ class PetWanderController:
                     self.mode = "WANDERING"
                     self._pick_next_action(now)
                 else:
-                    # 原地旋轉避障 (僅使用 A: -120, 120 或 D: 120, -120)
+                    # 原地旋轉避障 (僅使用 A: -140, 140 或 D: 150, -150)
                     if self.avoid_direction == "A":
-                        self.current_cmd = (-self.pivot_pwm, self.pivot_pwm)
-                        dir_str = "Spin Left (A: -120, 120)"
+                        self.current_cmd = (-140, 140)
+                        dir_str = "Spin Left (A: -140, 140)"
                     else:
-                        self.current_cmd = (self.pivot_pwm, -self.pivot_pwm)
-                        dir_str = "Spin Right (D: 120, -120)"
+                        self.current_cmd = (150, -150)
+                        dir_str = "Spin Right (D: 150, -150)"
                     dist_str = f"{distance_cm:.1f}cm" if distance_cm is not None else "N/A"
                     self.reason = f"🚨 Obstacle ({dist_str} <= {self.obstacle_dist_cm}cm) -> Evading: {dir_str}"
                     return self.current_cmd, self.reason
