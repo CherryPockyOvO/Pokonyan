@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Automatic state machine controller for audio/vision triggered missions."""
+"""Automatic state machine controller for audio/vision triggered missions with Pet Free Wandering."""
 
 import threading
 import time
 
+from control.pet_wander import PetWanderController
+
 
 class AutoController:
-    """State machine for automatic shoe-seeking mission."""
+    """State machine for automatic shoe-seeking mission and pet-like free wandering."""
 
-    def __init__(self, forward_pwm=250, slow_pwm=150, pivot_pwm=200, slow_distance_cm=15.0):
+    def __init__(self, forward_pwm=250, slow_pwm=150, pivot_pwm=200, inner_pwm=100, slow_distance_cm=15.0):
         self.lock = threading.Lock()
         self.state = "IDLE"
         self.state_since = time.monotonic()
@@ -22,15 +24,27 @@ class AutoController:
         self.slow_pwm = slow_pwm
         self.slow_distance_cm = slow_distance_cm
         self.pivot_pwm = pivot_pwm
+        self.inner_pwm = inner_pwm
         self.rotate_step_seconds = 0.45
         self.scan_pause_seconds = 2.0
         self.forward_seconds = 10.0
+
+        # 寵物自由漫遊與超聲波自動避障控制器
+        self.pet_wander = PetWanderController(
+            forward_pwm=self.forward_pwm,
+            pivot_pwm=self.pivot_pwm,
+            inner_pwm=self.inner_pwm,
+            obstacle_dist_cm=25.0,
+            clear_dist_cm=30.0,
+        )
 
     def _transition(self, state, now, reason):
         if state != self.state:
             print(f"[AutoController] {self.state} -> {state}: {reason}")
             self.state = state
             self.state_since = now
+            if state == "IDLE":
+                self.pet_wander.reset()
         self.reason = reason
 
     def trigger(self, event, score):
@@ -50,6 +64,7 @@ class AutoController:
         with self.lock:
             self._transition("E_STOP", time.monotonic(), "emergency stop triggered")
             self.command = (0, 0)
+            self.pet_wander.reset()
 
     def _stop(self, reason):
         self.command = (0, 0)
@@ -68,7 +83,7 @@ class AutoController:
         with self.lock:
             elapsed = now - self.state_since
 
-            if self.state in ("IDLE", "DONE", "FAILED", "E_STOP"):
+            if self.state in ("DONE", "FAILED", "E_STOP"):
                 return self._stop(self.reason)
 
             if not motor_status["ready"]:
@@ -77,6 +92,18 @@ class AutoController:
 
             distance = motor_status["distance_cm"]
 
+            # -------------------------------------------------------------
+            # IDLE 狀態：執行寵物自由漫遊與超聲波自動避障 (Pet Free Wandering)
+            # -------------------------------------------------------------
+            if self.state == "IDLE":
+                cmd, wander_reason = self.pet_wander.tick(distance)
+                self.command = cmd
+                self.reason = wander_reason
+                return self.command
+
+            # -------------------------------------------------------------
+            # 音訊 / 視覺觸發的尋物任務流程 (Mission Mode)
+            # -------------------------------------------------------------
             if self.state == "SEARCH_TURN":
                 if target is not None:
                     self._transition("FORWARD", now, "shoe detected")
