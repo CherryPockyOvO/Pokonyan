@@ -22,10 +22,11 @@ class YoloDetectorEngine:
         self,
         model_path="best_ncnn_model",
         target_video_fps=20,
-        infer_fps=5,
+        infer_fps=10,
         confidence=0.35,
         alpha=0.35,
         detection_hold_seconds=0.6,
+        min_consecutive_hits=5,
     ):
         self.model_path = Path(model_path).expanduser().resolve()
         self.target_video_fps = target_video_fps
@@ -33,6 +34,7 @@ class YoloDetectorEngine:
         self.confidence = confidence
         self.alpha = alpha
         self.detection_hold_seconds = detection_hold_seconds
+        self.min_consecutive_hits = min_consecutive_hits
 
         if not self.model_path.exists():
             print(f"[Vision] Warning: YOLO model path not found: {self.model_path}")
@@ -45,6 +47,7 @@ class YoloDetectorEngine:
         self.inference_at = 0.0
         self.last_detection_at = 0.0
         self.target_sequence = 0
+        self.consecutive_hits = 0
         self.ready = False
         self.error = ""
 
@@ -149,8 +152,7 @@ class YoloDetectorEngine:
         now = time.monotonic()
         target = None
         if self.smoothed_boxes:
-            # The training set has one shoe class. Prefer the largest box,
-            # breaking ties by confidence.
+            self.consecutive_hits += 1
             best = max(
                 self.smoothed_boxes,
                 key=lambda box: (
@@ -161,12 +163,22 @@ class YoloDetectorEngine:
             x1, y1, x2, y2, confidence, _ = best
             self.target_sequence += 1
             target = {
+                "center_x": (x1 + x2) / 2.0,
+                "center_y": (y1 + y2) / 2.0,
+                "box": [x1, y1, x2, y2],
+                "width": max(0.0, x2 - x1),
+                "height": max(0.0, y2 - y1),
                 "centre_x": ((x1 + x2) / 2.0 - width / 2.0) / (width / 2.0),
                 "height_ratio": max(0.0, y2 - y1) / height,
                 "confidence": float(confidence),
+                "consecutive_hits": self.consecutive_hits,
+                "is_stable": self.consecutive_hits >= self.min_consecutive_hits,
                 "detected_at": now,
                 "sequence": self.target_sequence,
             }
+        else:
+            self.consecutive_hits = 0
+
         with self.lock:
             self.latest_target = target
             self.inference_at = now
@@ -302,10 +314,13 @@ class YoloDetectorEngine:
         if self.thread is not None:
             self.thread.join(timeout=3.0)
 
-    def get_target(self, max_age=0.5):
+    def get_target(self, max_age=0.5, min_hits=None):
+        min_hits = self.min_consecutive_hits if min_hits is None else min_hits
         with self.lock:
             target = None if self.latest_target is None else dict(self.latest_target)
         if target is None or time.monotonic() - target["detected_at"] > max_age:
+            return None
+        if target.get("consecutive_hits", 0) < min_hits:
             return None
         return target
 
