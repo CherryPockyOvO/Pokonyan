@@ -20,19 +20,19 @@ class ManualController:
             now = time.monotonic()
             self.last_cmd_at = now
 
-            # 組合鍵判斷 (微調左右輪補償)
+            # 組合鍵判斷 (更大差速比：外輪 200 / 內輪 50)
             if cmd in ("WD", "DW"):
-                self.command = (200, 80)          # 組合鍵右拐 200, 80
-                self.reason = "manual forward-right (WD: 200, 80)"
+                self.command = (200, 50)          # 組合鍵右拐 200, 50
+                self.reason = "manual forward-right (WD: 200, 50)"
             elif cmd in ("WA", "AW"):
-                self.command = (80, 200)          # 組合鍵左拐 80, 200
-                self.reason = "manual forward-left (WA: 80, 200)"
+                self.command = (50, 200)          # 組合鍵左拐 50, 200
+                self.reason = "manual forward-left (WA: 50, 200)"
             elif cmd in ("SD", "DS"):
-                self.command = (-150, -70)        # 組合鍵右後 -150, -70
-                self.reason = "manual backward-right (SD: -150, -70)"
+                self.command = (-150, -40)        # 組合鍵右後 -150, -40
+                self.reason = "manual backward-right (SD: -150, -40)"
             elif cmd in ("SA", "AS"):
-                self.command = (-80, -150)        # 組合鍵左後 -80, -150
-                self.reason = "manual backward-left (SA: -80, -150)"
+                self.command = (-40, -150)        # 組合鍵左後 -40, -150
+                self.reason = "manual backward-left (SA: -40, -150)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
                 self.command = (200, 200)         # 直向前進 200, 200

@@ -10,7 +10,7 @@ from control.pet_wander import PetWanderController
 class AutoController:
     """State machine for automatic shoe-seeking mission and pet-like free wandering."""
 
-    def __init__(self, forward_pwm=200, slow_pwm=200, pivot_pwm=120, inner_pwm=100, slow_distance_cm=50.0):
+    def __init__(self, forward_pwm=200, slow_pwm=200, pivot_pwm=120, inner_pwm=100, slow_distance_cm=65.0):
         self.lock = threading.Lock()
         self.state = "IDLE"
         self.state_since = time.monotonic()
@@ -29,10 +29,10 @@ class AutoController:
         self.scan_pause_seconds = 2.0
         self.forward_seconds = 10.0
 
-        # 寵物自由漫遊與 50cm 超聲波自動避障控制器
+        # 寵物自由漫遊與 65cm 超聲波自動避障控制器
         self.pet_wander = PetWanderController(
-            obstacle_dist_cm=50.0,
-            clear_dist_cm=55.0,
+            obstacle_dist_cm=65.0,
+            clear_dist_cm=70.0,
         )
 
     def _transition(self, state, now, reason):

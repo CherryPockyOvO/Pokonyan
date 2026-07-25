@@ -13,13 +13,13 @@ class PetWanderController:
     1. Randomly executes non-backward forward actions (W, WA, WD, A, D) and short pauses (B).
     2. Pause duration is kept short (0.4 ~ 0.9s) so it moves around like a pet.
     3. Excludes backward commands (S, SA, SD).
-    4. Automatically avoids obstacles at 50cm using ONLY left (A: -140, 140) / right (D: 150, -150) spins.
+    4. Automatically avoids obstacles at 65cm using ONLY left (A: -140, 140) / right (D: 150, -150) spins.
     """
 
     def __init__(
         self,
-        obstacle_dist_cm=50.0,
-        clear_dist_cm=55.0,
+        obstacle_dist_cm=65.0,
+        clear_dist_cm=70.0,
     ):
         self.lock = threading.Lock()
         self.obstacle_dist_cm = obstacle_dist_cm
@@ -42,16 +42,16 @@ class PetWanderController:
                 "name": "Forward (W: 200, 200)",
             },
             "WA": {
-                "pwm": (80, 200),         # 組合鍵左拐 (80, 200)
+                "pwm": (50, 200),         # 組合鍵左拐 (50, 200)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Left (WA: 80, 200)",
+                "name": "Forward-Left (WA: 50, 200)",
             },
             "WD": {
-                "pwm": (200, 80),         # 組合鍵右拐 (200, 80)
+                "pwm": (200, 50),         # 組合鍵右拐 (200, 50)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Right (WD: 200, 80)",
+                "name": "Forward-Right (WD: 200, 50)",
             },
             "A": {
                 "pwm": (-140, 140),       # 左拐 (-140, 140)
@@ -112,16 +112,16 @@ class PetWanderController:
             )
 
             # -------------------------------------------------------------
-            # 1. 50cm 超聲波自動避障模式 (單純左轉 A: -140,140 或右轉 D: 150,-150)
+            # 1. 65cm 超聲波自動避障模式 (單純左轉 A: -140,140 或右轉 D: 150,-150)
             # -------------------------------------------------------------
             if is_obstacle or self.mode == "AVOID_OBSTACLE":
                 if self.mode != "AVOID_OBSTACLE":
-                    # 剛剛觸發 50cm 避障：隨機選擇左轉 A (-140, 140) 或右轉 D (150, -150)
+                    # 剛剛觸發 65cm 避障：隨機選擇左轉 A (-140, 140) 或右轉 D (150, -150)
                     self.mode = "AVOID_OBSTACLE"
                     self.avoid_direction = random.choice(["A", "D"])
                     self.avoid_start_time = now
 
-                # 判斷道路是否恢復清空 (超聲波 > 55cm 且轉動超過最小時間 0.4s)
+                # 判斷道路是否恢復清空 (超聲波 >= 70cm 且轉動超過最小時間 0.4s)
                 path_cleared = (
                     distance_cm is not None
                     and distance_cm >= self.clear_dist_cm
