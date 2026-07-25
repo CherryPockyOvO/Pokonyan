@@ -35,9 +35,8 @@ class YoloDetectorEngine:
         self.detection_hold_seconds = detection_hold_seconds
 
         if not self.model_path.exists():
-            raise FileNotFoundError(f"YOLO model not found: {self.model_path}")
-        print(f"[Vision] Loading YOLO model: {self.model_path}")
-        self.model = YOLO(str(self.model_path), task="detect")
+            print(f"[Vision] Warning: YOLO model path not found: {self.model_path}")
+        self.model = None
 
         self.lock = threading.Lock()
         self.latest_annotated_frame = self._placeholder("Starting camera...")
@@ -195,6 +194,15 @@ class YoloDetectorEngine:
         return annotated
 
     def _loop(self):
+        if self.model is None and self.model_path.exists():
+            print(f"[Vision] Async loading YOLO model: {self.model_path}")
+            try:
+                self.model = YOLO(str(self.model_path), task="detect")
+                print(f"[Vision] YOLO model loaded successfully!")
+            except Exception as error:
+                print(f"[Vision] YOLO model load warning: {error}")
+                self.error = f"YOLO model load warning: {error}"
+
         self.camera_type = self._open_camera()
         if self.camera_type is None:
             with self.lock:
@@ -221,7 +229,7 @@ class YoloDetectorEngine:
                     self.frame_at = now
                     self.error = ""
 
-                if now >= next_inference:
+                if self.model is not None and now >= next_inference:
                     next_inference = now + inference_period
                     try:
                         results = self.model.predict(
