@@ -42,16 +42,16 @@ class PetWanderController:
                 "name": "Forward (W: 200, 200)",
             },
             "WA": {
-                "pwm": (50, 200),         # 組合鍵左拐 (50, 200)
+                "pwm": (110, 200),        # 組合鍵左拐 (110, 200, 提高左輪避免錨定原地旋轉)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Left (WA: 50, 200)",
+                "name": "Forward-Left (WA: 110, 200)",
             },
             "WD": {
-                "pwm": (200, 50),         # 組合鍵右拐 (200, 50)
+                "pwm": (200, 70),         # 組合鍵右拐 (200, 70)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Right (WD: 200, 50)",
+                "name": "Forward-Right (WD: 200, 70)",
             },
             "A": {
                 "pwm": (-140, 140),       # 左拐 (-140, 140)

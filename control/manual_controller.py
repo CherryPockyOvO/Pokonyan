@@ -6,7 +6,7 @@ import time
 
 
 class ManualController:
-    """Manual control handling WASD and combination key commands with fine-tuned motor compensation."""
+    """Manual control handling WASD and combination key commands with fine-tuned asymmetric motor compensation."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -20,19 +20,19 @@ class ManualController:
             now = time.monotonic()
             self.last_cmd_at = now
 
-            # 組合鍵判斷 (更大差速比：外輪 200 / 內輪 50)
+            # 組合鍵判斷 (非對稱左右輪物理動力補償)
             if cmd in ("WD", "DW"):
-                self.command = (200, 50)          # 組合鍵右拐 200, 50
-                self.reason = "manual forward-right (WD: 200, 50)"
+                self.command = (200, 70)          # 右前弧線 (左輪200, 右輪70)
+                self.reason = "manual forward-right (WD: 200, 70)"
             elif cmd in ("WA", "AW"):
-                self.command = (50, 200)          # 組合鍵左拐 50, 200
-                self.reason = "manual forward-left (WA: 50, 200)"
+                self.command = (110, 200)         # 左前弧線 (左輪提高至110避免錨定原地旋轉, 右輪200)
+                self.reason = "manual forward-left (WA: 110, 200)"
             elif cmd in ("SD", "DS"):
-                self.command = (-150, -40)        # 組合鍵右後 -150, -40
-                self.reason = "manual backward-right (SD: -150, -40)"
+                self.command = (-150, -60)        # 右後弧線 (左輪-150, 右輪-60)
+                self.reason = "manual backward-right (SD: -150, -60)"
             elif cmd in ("SA", "AS"):
-                self.command = (-40, -150)        # 組合鍵左後 -40, -150
-                self.reason = "manual backward-left (SA: -40, -150)"
+                self.command = (-95, -150)        # 左後弧線 (左輪提高至-95避免錨定原地旋轉, 右輪-150)
+                self.reason = "manual backward-left (SA: -95, -150)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
                 self.command = (200, 200)         # 直向前進 200, 200
