@@ -1,29 +1,46 @@
 # -*- coding: utf-8 -*-
-"""Manual WASD controller module for web remote control."""
+"""Manual WASD and Diagonal (WA, WD, SA, SD) controller module for web remote control."""
 
 import threading
 import time
 
 
 class ManualController:
-    """Manual control handling WASD commands and motor target output."""
+    """Manual control handling WASD and combination key commands."""
 
-    def __init__(self, forward_pwm=150, pivot_pwm=120):
+    def __init__(self, forward_pwm=250, pivot_pwm=200, inner_pwm=150):
         self.lock = threading.Lock()
         self.command = (0, 0)
         self.reason = "manual standby"
         self.forward_pwm = forward_pwm
         self.pivot_pwm = pivot_pwm
+        self.inner_pwm = inner_pwm
         self.last_cmd_at = time.monotonic()
 
     def handle_command(self, cmd):
-        cmd = str(cmd).upper()
+        cmd = str(cmd).upper().strip()
         with self.lock:
             now = time.monotonic()
             self.last_cmd_at = now
-            pwm = self.forward_pwm
-            pivot = self.pivot_pwm
-            if cmd in ("W", "FORWARD"):
+            pwm = self.forward_pwm     # 250
+            pivot = self.pivot_pwm   # 200
+            inner = self.inner_pwm   # 150
+
+            # 組合鍵判斷
+            if cmd in ("WD", "DW"):
+                self.command = (pwm, inner)
+                self.reason = "manual forward-right (WD)"
+            elif cmd in ("WA", "AW"):
+                self.command = (inner, pwm)
+                self.reason = "manual forward-left (WA)"
+            elif cmd in ("SD", "DS"):
+                self.command = (-pwm, -inner)
+                self.reason = "manual backward-right (SD)"
+            elif cmd in ("SA", "AS"):
+                self.command = (-inner, -pwm)
+                self.reason = "manual backward-left (SA)"
+            # 單鍵判斷
+            elif cmd in ("W", "FORWARD"):
                 self.command = (pwm, pwm)
                 self.reason = "manual forward (W)"
             elif cmd in ("S", "BACKWARD"):

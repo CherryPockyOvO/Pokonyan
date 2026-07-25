@@ -53,19 +53,19 @@ img{width:100%;background:#000;border:1px solid #30363d;border-radius:8px}
   </section>
 
   <section class="card">
-    <div class="label">🎮 MANUAL WASD Control (Keyboard / Touch)</div>
+    <div class="label">🎮 MANUAL WASD Control (8-Direction Keyboard / Touch)</div>
     <div class="wasd-pad">
-      <div></div>
-      <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W</button>
-      <div></div>
-      <button class="btn btn-wasd" id="key-a" onclick="sendCmd('A')">A</button>
+      <button class="btn btn-wasd" id="key-wa" onclick="sendCmd('WA')">WA ↖</button>
+      <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W ↑</button>
+      <button class="btn btn-wasd" id="key-wd" onclick="sendCmd('WD')">WD ↗</button>
+      <button class="btn btn-wasd" id="key-a" onclick="sendCmd('A')">A ←</button>
       <button class="btn btn-wasd btn-brake" id="key-b" onclick="sendCmd('B')">B (Brake)</button>
-      <button class="btn btn-wasd" id="key-d" onclick="sendCmd('D')">D</button>
-      <div></div>
-      <button class="btn btn-wasd" id="key-s" onclick="sendCmd('S')">S</button>
-      <div></div>
+      <button class="btn btn-wasd" id="key-d" onclick="sendCmd('D')">D →</button>
+      <button class="btn btn-wasd" id="key-sa" onclick="sendCmd('SA')">SA ↙</button>
+      <button class="btn btn-wasd" id="key-s" onclick="sendCmd('S')">S ↓</button>
+      <button class="btn btn-wasd" id="key-sd" onclick="sendCmd('SD')">SD ↘</button>
     </div>
-    <div class="wasd-hint">Keyboard: W (Forward), S (Back), A (Left), D (Right), B/Space (Brake)</div>
+    <div class="wasd-hint">Keyboard: W (Forward), S (Back), A (Left), D (Right), WD/WA/SD/SA (Diagonals), B/Space (Brake)</div>
   </section>
 
   <section class="card">
@@ -132,15 +132,52 @@ async function emergencyStop(){
   poll();
 }
 
-// ⌨️ Keyboard WASD listener
+// ⌨️ Multi-key combination Keyboard listener (W+D -> WD, W+A -> WA, S+D -> SD, S+A -> SA)
+const activeKeys = new Set();
+let lastSentCmd = '';
+
+function processCombination() {
+  if (activeKeys.has('b') || activeKeys.has(' ')) {
+    if (lastSentCmd !== 'B') { sendCmd('B'); lastSentCmd = 'B'; }
+    return;
+  }
+  const hasW = activeKeys.has('w');
+  const hasS = activeKeys.has('s');
+  const hasA = activeKeys.has('a');
+  const hasD = activeKeys.has('d');
+
+  let cmd = 'B';
+  if (hasW && hasD) cmd = 'WD';
+  else if (hasW && hasA) cmd = 'WA';
+  else if (hasS && hasD) cmd = 'SD';
+  else if (hasS && hasA) cmd = 'SA';
+  else if (hasW) cmd = 'W';
+  else if (hasS) cmd = 'S';
+  else if (hasA) cmd = 'A';
+  else if (hasD) cmd = 'D';
+
+  if (cmd !== lastSentCmd) {
+    sendCmd(cmd);
+    lastSentCmd = cmd;
+  }
+}
+
 document.addEventListener('keydown', (e) => {
   if (currentMode !== 'MANUAL') return;
-  const key = e.key.toLowerCase();
-  if (key === 'w') sendCmd('W');
-  else if (key === 's') sendCmd('S');
-  else if (key === 'a') sendCmd('A');
-  else if (key === 'd') sendCmd('D');
-  else if (key === 'b' || key === ' ') sendCmd('B');
+  const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd', 'b', ' '].includes(k)) {
+    activeKeys.add(k);
+    processCombination();
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (currentMode !== 'MANUAL') return;
+  const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd', 'b', ' '].includes(k)) {
+    activeKeys.delete(k);
+    processCombination();
+  }
 });
 
 setInterval(poll, 400);

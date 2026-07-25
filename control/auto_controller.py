@@ -8,7 +8,7 @@ import time
 class AutoController:
     """State machine for automatic shoe-seeking mission."""
 
-    def __init__(self, forward_pwm=150, slow_pwm=90, pivot_pwm=120, slow_distance_cm=15.0):
+    def __init__(self, forward_pwm=250, slow_pwm=150, pivot_pwm=200, slow_distance_cm=15.0):
         self.lock = threading.Lock()
         self.state = "IDLE"
         self.state_since = time.monotonic()
