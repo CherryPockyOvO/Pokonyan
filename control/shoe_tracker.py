@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Autonomous Shoe Tracking Controller with Pulse-Steering & Shoe Obstacle Exemption."""
+"""Autonomous Shoe Tracking Controller with Pure Target Pursuit & Obstacle Bypass."""
 
 import threading
 import time
 
 
 class ShoeTrackerController:
-    """Shoe Tracking Controller using YOLO bounding box center, low-pass anti-jitter filter,
-    step/pulse-based turn control (0.15s pulse + 0.10s pause), and intelligent shoe obstacle exemption.
+    """Shoe Tracking Controller focusing 100% on target pursuit when a YOLO shoe box is detected.
     
     Features:
-    1. Low-Pass Exponential Anti-Jitter Filter on target center offset (dx).
-    2. Timed Step/Pulse Steering (0.15s turn pulse + 0.10s camera pause) to eliminate low-PWM stalling & overshooting.
-    3. Shoe Obstacle Exemption: When the shoe is centered in front (abs(dx) <= 100px), ultrasonic distance <= 65cm
-       is recognised as the target shoe itself, so obstacle evasion is bypassed and the robot drives straight into the shoe!
+    1. Complete Obstacle Avoidance Bypass: Whenever a YOLO shoe box is present in the field of view,
+       all obstacle avoidance is completely cancelled so the robot drives directly towards the shoe.
+    2. Low-Pass Exponential Anti-Jitter Filter on target center offset (dx).
+    3. Step/Pulse Steering (0.15s turn pulse + 0.10s camera pause) for smooth, step-by-step target centering.
+    4. Arrival Check: Drives straight into the shoe until distance <= 15cm or shoe takes over 60% of screen height, then stops.
     """
 
     def __init__(
@@ -21,7 +21,6 @@ class ShoeTrackerController:
         target_center_x=320.0,
         deadband_px=30.0,
         smoothing_alpha=0.3,
-        obstacle_dist_cm=65.0,
         stop_dist_cm=15.0,
         full_shoe_height_ratio=0.60,
         pulse_duration_sec=0.15,
@@ -31,7 +30,6 @@ class ShoeTrackerController:
         self.target_center_x = target_center_x
         self.deadband_px = deadband_px
         self.alpha = smoothing_alpha
-        self.obstacle_dist_cm = obstacle_dist_cm
         self.stop_dist_cm = stop_dist_cm
         self.full_shoe_height_ratio = full_shoe_height_ratio
         self.pulse_duration_sec = pulse_duration_sec
@@ -39,9 +37,6 @@ class ShoeTrackerController:
 
         self.smoothed_dx = 0.0
         self.has_smoothed = False
-        self.evading_obstacle = False
-        self.evade_direction = "A"
-        self.evade_start_at = 0.0
 
         # 脈衝步進轉向狀態機 (Pulse Step Steering State)
         self.pulse_state = "IDLE"  # "IDLE", "PULSING", "PAUSING"
@@ -55,7 +50,6 @@ class ShoeTrackerController:
         with self.lock:
             self.smoothed_dx = 0.0
             self.has_smoothed = False
-            self.evading_obstacle = False
             self.pulse_state = "IDLE"
             self.pulse_cmd = (0, 0)
             self.pulse_until = 0.0
@@ -63,7 +57,7 @@ class ShoeTrackerController:
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：傳入 YOLO 目標與即時超聲波距離。"""
+        """核心追蹤週期函數：當視野出現鞋子框時，取消避障，全力對準並直奔鞋子。"""
         now = time.monotonic()
         with self.lock:
             if target is None:
@@ -84,7 +78,6 @@ class ShoeTrackerController:
 
             dx = self.smoothed_dx
             valid_dist = distance_cm is not None and distance_cm > 0.0
-            shoe_centered = abs(dx) <= 100.0  # 鞋子在視角正前方範圍內
 
             # -------------------------------------------------------------
             # 2. 抵達鞋子特判 (撞到鞋子 / 畫面滿屏鞋子 / 超聲波 <= 15cm)
@@ -99,29 +92,8 @@ class ShoeTrackerController:
                 return (0, 0), self.reason
 
             # -------------------------------------------------------------
-            # 3. 智能超聲波自動避障 (鞋子居中時免除避障，避免把鞋子當障礙物)
+            # 3. 取消避障！直接專注於鞋子中心對準與追蹤 (Pure Shoe Pursuit)
             # -------------------------------------------------------------
-            # 只有當「鞋子不在視角正前方 (dx > 100px)」且「前方距離 <= 65cm」時才觸發避障！
-            is_side_obstacle = valid_dist and (distance_cm <= self.obstacle_dist_cm) and not shoe_centered
-
-            if is_side_obstacle or self.evading_obstacle:
-                if not self.evading_obstacle:
-                    self.evading_obstacle = True
-                    self.evade_direction = "A" if dx < 0 else "D"
-                    self.evade_start_at = now
-
-                path_cleared = (
-                    (not valid_dist or distance_cm >= 70.0)
-                    and (now - self.evade_start_at >= 0.4)
-                )
-
-                if path_cleared:
-                    self.evading_obstacle = False
-                else:
-                    cmd = (-160, 165) if self.evade_direction == "A" else (175, -175)
-                    dir_str = "Spin Left (-160, 165)" if self.evade_direction == "A" else "Spin Right (175, -175)"
-                    self.reason = f"🚨 Side Obstacle ({distance_cm:.1f}cm <= 65cm) -> Evading: {dir_str}"
-                    return cmd, self.reason
 
             # -------------------------------------------------------------
             # 4. 步進式小幅度脈衝轉向控制 (Step / Pulse Steering Control)
@@ -143,10 +115,10 @@ class ShoeTrackerController:
                 else:
                     self.pulse_state = "IDLE"
 
-            # C) 精確對準中心 (±30px 死區) -> 全速直向前進
+            # C) 精確對準中心 (±30px 死區) -> 全速直向前進 (200, 200)
             if abs(dx) <= self.deadband_px:
                 cmd = (200, 200)
-                self.reason = f"🎯 Tracking: Centered (dx={dx:.1f}) -> Driving Forward"
+                self.reason = f"🎯 Tracking: Centered (dx={dx:.1f}) -> Driving Forward to Shoe"
                 return cmd, self.reason
 
             # D) 觸發新的小幅度步進轉向脈衝 (0.15s 強力轉向 + 0.10s 觀察)
@@ -170,6 +142,6 @@ class ShoeTrackerController:
             self.pulse_state = "PULSING"
             self.pulse_cmd = cmd
             self.pulse_until = now + (0.18 if abs(dx) <= 90 else self.pulse_duration_sec)
-            self.reason = f"🎯 Tracking: {act_name} (dx={dx:.1f})"
+            self.reason = f"🎯 Tracking Shoe: {act_name} (dx={dx:.1f})"
 
             return self.pulse_cmd, self.reason
