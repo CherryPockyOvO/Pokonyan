@@ -204,11 +204,12 @@ class YoloDetectorEngine:
                 self.error = f"YOLO model load warning: {error}"
 
         self.camera_type = self._open_camera()
-        if self.camera_type is None:
+        while self.running and self.camera_type is None:
             with self.lock:
-                self.error = "camera unavailable"
-                self.latest_annotated_frame = self._placeholder("Camera unavailable")
-            return
+                self.error = "camera busy / unavailable"
+                self.latest_annotated_frame = self._placeholder("Camera busy / Reconnecting...")
+            time.sleep(1.0)
+            self.camera_type = self._open_camera()
 
         frame_period = 1.0 / max(1.0, self.target_video_fps)
         inference_period = 1.0 / max(0.1, self.infer_fps)
