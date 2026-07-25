@@ -5,6 +5,7 @@ import threading
 import time
 
 from control.pet_wander import PetWanderController
+from control.shoe_tracker import ShoeTrackerController
 
 
 class AutoController:
@@ -29,10 +30,20 @@ class AutoController:
         self.scan_pause_seconds = 2.0
         self.forward_seconds = 10.0
 
-        # 寵物自由漫遊與 65cm 超聲波自動避障控制器
+        # 1. 寵物自由漫遊與 65cm 超聲波自動避障控制器
         self.pet_wander = PetWanderController(
             obstacle_dist_cm=65.0,
             clear_dist_cm=70.0,
+        )
+
+        # 2. 獨立 YOLO 檢測框中心抗抖動追蹤與避障控制器
+        self.shoe_tracker = ShoeTrackerController(
+            target_center_x=320.0,
+            deadband_px=30.0,
+            smoothing_alpha=0.3,
+            obstacle_dist_cm=65.0,
+            stop_dist_cm=15.0,
+            full_shoe_height_ratio=0.65,
         )
 
     def _transition(self, state, now, reason):
@@ -42,6 +53,7 @@ class AutoController:
             self.state_since = now
             if state == "IDLE":
                 self.pet_wander.reset()
+                self.shoe_tracker.reset()
         self.reason = reason
 
     def trigger(self, event, score):
@@ -62,6 +74,7 @@ class AutoController:
             self._transition("E_STOP", time.monotonic(), "emergency stop triggered")
             self.command = (0, 0)
             self.pet_wander.reset()
+            self.shoe_tracker.reset()
 
     def reset(self):
         with self.lock:
@@ -71,50 +84,11 @@ class AutoController:
             self.command = (0, 0)
             self._transition("IDLE", time.monotonic(), "reset to IDLE (AUTO mode)")
             self.pet_wander.reset()
+            self.shoe_tracker.reset()
 
     def _stop(self, reason):
         self.command = (0, 0)
         self.reason = reason
-        return self.command
-
-    def _track_target(self, target, distance_cm):
-        """根據 YOLO 檢測框中心 (center_x) 進行即時視覺自動對準與追蹤。
-        
-        畫面寬度：640，中心 X = 320.0
-        對準死區 Tolerance：±35 像素 (285 <= center_x <= 355 視為精確對準)
-        """
-        center_x = target["center_x"]
-        delta_x = center_x - 320.0  # 偏左為負，偏右為正
-        valid_dist = distance_cm is not None and distance_cm > 0.0
-
-        # 超聲波小於等於 15cm，即視為成功抵達目標
-        if valid_dist and distance_cm <= 15.0:
-            self.command = (0, 0)
-            self.reason = f"🎯 Target reached! Distance: {distance_cm:.1f} cm <= 15cm"
-            return self.command
-
-        # 根據偏離中心點 X 進行即時動態微調轉向
-        if delta_x < -120.0:
-            # 大幅偏左 -> 原地左轉 (-160, 165)
-            self.command = (-160, 165)
-            self.reason = f"🎯 YOLO Center Tracking: Target far left (dx={delta_x:.0f}) -> Spin Left"
-        elif delta_x < -35.0:
-            # 輕微偏左 -> 弧線左前 (75, 240)
-            self.command = (75, 240)
-            self.reason = f"🎯 YOLO Center Tracking: Target left (dx={delta_x:.0f}) -> Curve Left"
-        elif delta_x > 120.0:
-            # 大幅偏右 -> 原地右轉 (175, -175)
-            self.command = (175, -175)
-            self.reason = f"🎯 YOLO Center Tracking: Target far right (dx={delta_x:.0f}) -> Spin Right"
-        elif delta_x > 35.0:
-            # 輕微偏右 -> 弧線右前 (240, 80)
-            self.command = (240, 80)
-            self.reason = f"🎯 YOLO Center Tracking: Target right (dx={delta_x:.0f}) -> Curve Right"
-        else:
-            # 精確對準中心 (±35 像素) -> 直向前進 (200, 200)
-            self.command = (200, 200)
-            self.reason = f"🎯 YOLO Center Tracking: Target Centered (dx={delta_x:.0f}) -> Drive Forward"
-
         return self.command
 
     def tick(self, target, motor_status):
@@ -132,14 +106,18 @@ class AutoController:
             distance = motor_status["distance_cm"]
 
             # -------------------------------------------------------------
-            # AUTO 模式下優先檢測：若 YOLO 辨識到拖鞋，優先進行中心追蹤 (YOLO Center Tracking)
+            # AUTO 模式下優先檢測：若 YOLO 連續 5 幀穩定辨識到拖鞋，啟動獨立 ShoeTracker
             # -------------------------------------------------------------
             if target is not None:
-                return self._track_target(target, distance)
+                cmd, track_reason = self.shoe_tracker.tick(target, distance)
+                self.command = cmd
+                self.reason = track_reason
+                return self.command
 
             # -------------------------------------------------------------
-            # IDLE / 無目標狀態：執行寵物自由漫遊與 65cm 超聲波自動避障
+            # IDLE / 無目標狀態：重置追蹤器並執行寵物自由漫遊與 65cm 超聲波自動避障
             # -------------------------------------------------------------
+            self.shoe_tracker.reset()
             if self.state in ("IDLE", "SEARCH_PAUSE", "SEARCH_TURN"):
                 cmd, wander_reason = self.pet_wander.tick(distance)
                 self.command = cmd
@@ -150,7 +128,10 @@ class AutoController:
                 if elapsed >= self.forward_seconds:
                     self._transition("DONE", now, "timed forward run complete")
                     return self._stop(self.reason)
-                return self._track_target(target, distance) if target is not None else self._stop(self.reason)
+                cmd, track_reason = self.shoe_tracker.tick(target, distance)
+                self.command = cmd
+                self.reason = track_reason
+                return self.command
 
             self._transition("FAILED", now, "unknown state")
             return self._stop(self.reason)

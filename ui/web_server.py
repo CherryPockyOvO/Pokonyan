@@ -70,8 +70,9 @@ img{width:100%;background:#000;border:1px solid #30363d;border-radius:8px}
 
   <section class="card">
     <div class="label">Shoe target</div><div id="target" class="value">not seen</div>
+    <div class="label">YOLO Inference Rate</div><div id="yolo_fps" class="value">0.0 FPS</div>
     <div class="label">Ultrasonic Distance</div><div id="distance" class="value">-</div>
-    <div class="label">Arduino I2C Status</div><div id="arduino">-</div>
+    <div class="label">Arduino Serial Status</div><div id="arduino">-</div>
   </section>
 
   <section class="card">
@@ -101,6 +102,7 @@ async function poll(){
     
     const t=v.target;
     show('target', t ? 'x=' + t.centre_x.toFixed(2) + ', height=' + t.height_ratio.toFixed(2) : 'not seen');
+    show('yolo_fps', (v.fps ?? 0.0).toFixed(1) + ' FPS');
     show('distance', m.distance_cm == null ? '-' : m.distance_cm.toFixed(1) + ' cm');
     show('arduino', m.ready ? 'CONNECTED (Serial)' : (m.connected ? 'WAITING' : 'OFFLINE'));
     show('event', a.event ? (a.event + ' (' + (a.event_score??0).toFixed(2) + ')') : '-');

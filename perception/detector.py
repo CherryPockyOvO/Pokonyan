@@ -48,6 +48,9 @@ class YoloDetectorEngine:
         self.last_detection_at = 0.0
         self.target_sequence = 0
         self.consecutive_hits = 0
+        self.fps = 0.0
+        self.fps_frame_count = 0
+        self.fps_start_time = time.monotonic()
         self.ready = False
         self.error = ""
 
@@ -252,6 +255,12 @@ class YoloDetectorEngine:
                             max_det=5,
                             verbose=False,
                         )
+                        self.fps_frame_count += 1
+                        fps_elapsed = now - self.fps_start_time
+                        if fps_elapsed >= 1.0:
+                            self.fps = self.fps_frame_count / fps_elapsed
+                            self.fps_frame_count = 0
+                            self.fps_start_time = now
                         boxes = []
                         if results:
                             for result_box in results[0].boxes:
@@ -330,6 +339,7 @@ class YoloDetectorEngine:
             return {
                 "ready": self.ready,
                 "error": self.error,
+                "fps": round(self.fps, 1),
                 "frame_age_ms": (
                     None if not self.frame_at else round((now - self.frame_at) * 1000)
                 ),
