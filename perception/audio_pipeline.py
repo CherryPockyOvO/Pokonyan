@@ -238,16 +238,17 @@ class YamnetWhisperAudioPipeline:
         max_speech_sec=10.0,
         on_event=None,
     ):
+        if Interpreter is None:
+            raise RuntimeError("LiteRT/TFLite interpreter is not installed")
+        if WhisperCPP is None:
+            raise RuntimeError("pywhispercpp is not installed")
+
         self.yamnet_model_path = Path(yamnet_model_path).expanduser().resolve()
         self.whisper_model_path = Path(whisper_model_path).expanduser().resolve()
-
-        self.tflite_available = (Interpreter is not None) and self.yamnet_model_path.is_file()
-        self.whisper_available = (WhisperCPP is not None) and self.whisper_model_path.is_file()
-
-        if not self.tflite_available:
-            print("[Audio] Notice: TFLite engine/model not active. Using DSP Bandpass Energy Alarm Detector.")
-        if not self.whisper_available:
-            print("[Audio] Notice: pywhispercpp not active. Speech-to-text disabled (Alarm sound detection remains ACTIVE).")
+        if not self.yamnet_model_path.is_file():
+            raise FileNotFoundError(f"YAMNet model not found: {self.yamnet_model_path}")
+        if not self.whisper_model_path.is_file():
+            raise FileNotFoundError(f"Whisper model not found: {self.whisper_model_path}")
 
         self.target_sample_rate = target_sample_rate
         self.window_size = 15600           # 0.975 s at 16 kHz
@@ -315,10 +316,6 @@ class YamnetWhisperAudioPipeline:
         return interp
 
     def _load_yamnets(self):
-        if not self.tflite_available:
-            self.speech_interp = None
-            self.bell_interp = None
-            return
         model = str(self.yamnet_model_path)
         print(f"[Audio] Loading YAMNet-Speech with {LITE_ENGINE}: {model}")
         self.speech_interp = self._make_interpreter()
@@ -326,9 +323,6 @@ class YamnetWhisperAudioPipeline:
         self.bell_interp = self._make_interpreter()
 
     def _load_whisper(self):
-        if not self.whisper_available:
-            self.whisper_model = None
-            return
         print(f"[Audio] Loading Whisper.cpp: {self.whisper_model_path}")
         self.whisper_model = WhisperCPP(str(self.whisper_model_path), n_threads=4)
 
@@ -388,22 +382,6 @@ class YamnetWhisperAudioPipeline:
     # ------------------------------------------------------------------
     def _scores(self, waveform, interpreter):
         """Run *interpreter* on *waveform* and return averaged class scores."""
-        if interpreter is None:
-            rms = float(np.sqrt(np.mean(waveform ** 2)))
-            scores = np.zeros(521, dtype=np.float32)
-            if rms > 0.04:
-                fft_vals = np.abs(np.fft.rfft(waveform))
-                freqs = np.fft.rfftfreq(len(waveform), 1.0 / self.target_sample_rate)
-                peak_idx = np.argmax(fft_vals)
-                peak_freq = freqs[peak_idx]
-                if 500 <= peak_freq <= 3500:
-                    score_val = min(0.99, rms * 4.0)
-                    for idx in BELL_EVENTS.get("alarm", [500]):
-                        if idx < 521: scores[idx] = score_val
-                    for idx in BELL_EVENTS.get("alarm_clock", [499]):
-                        if idx < 521: scores[idx] = score_val
-            return scores
-
         detail = interpreter.get_input_details()[0]
         tensor = np.asarray(waveform, dtype=np.float32)
         scale, zero_point = detail.get("quantization", (0.0, 0))
