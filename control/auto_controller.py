@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Automatic state machine controller for audio/vision triggered missions with Pet Free Wandering."""
+"""Automatic state machine controller for audio/vision triggered missions with Pet Free Wandering & Real-time YOLO Center Tracking."""
 
 import threading
 import time
@@ -8,7 +8,7 @@ from control.pet_wander import PetWanderController
 
 
 class AutoController:
-    """State machine for automatic shoe-seeking mission and pet-like free wandering."""
+    """State machine for automatic shoe-seeking mission, pet-like free wandering, and YOLO box center tracking."""
 
     def __init__(self, forward_pwm=240, slow_pwm=240, pivot_pwm=165, inner_pwm=80, slow_distance_cm=65.0):
         self.lock = threading.Lock()
@@ -77,12 +77,44 @@ class AutoController:
         self.reason = reason
         return self.command
 
-    def _forward(self, distance):
-        valid = distance is not None and distance > 0.0
-        near = valid and distance <= self.slow_distance_cm
-        pwm = self.slow_pwm if near else self.forward_pwm
-        self.command = (pwm, pwm)
-        self.reason = f"distance at or below {self.slow_distance_cm:.0f} cm" if near else "timed forward run"
+    def _track_target(self, target, distance_cm):
+        """根據 YOLO 檢測框中心 (center_x) 進行即時視覺自動對準與追蹤。
+        
+        畫面寬度：640，中心 X = 320.0
+        對準死區 Tolerance：±35 像素 (285 <= center_x <= 355 視為精確對準)
+        """
+        center_x = target["center_x"]
+        delta_x = center_x - 320.0  # 偏左為負，偏右為正
+        valid_dist = distance_cm is not None and distance_cm > 0.0
+
+        # 超聲波小於等於 15cm，即視為成功抵達目標
+        if valid_dist and distance_cm <= 15.0:
+            self.command = (0, 0)
+            self.reason = f"🎯 Target reached! Distance: {distance_cm:.1f} cm <= 15cm"
+            return self.command
+
+        # 根據偏離中心點 X 進行即時動態微調轉向
+        if delta_x < -120.0:
+            # 大幅偏左 -> 原地左轉 (-160, 165)
+            self.command = (-160, 165)
+            self.reason = f"🎯 YOLO Center Tracking: Target far left (dx={delta_x:.0f}) -> Spin Left"
+        elif delta_x < -35.0:
+            # 輕微偏左 -> 弧線左前 (75, 240)
+            self.command = (75, 240)
+            self.reason = f"🎯 YOLO Center Tracking: Target left (dx={delta_x:.0f}) -> Curve Left"
+        elif delta_x > 120.0:
+            # 大幅偏右 -> 原地右轉 (175, -175)
+            self.command = (175, -175)
+            self.reason = f"🎯 YOLO Center Tracking: Target far right (dx={delta_x:.0f}) -> Spin Right"
+        elif delta_x > 35.0:
+            # 輕微偏右 -> 弧線右前 (240, 80)
+            self.command = (240, 80)
+            self.reason = f"🎯 YOLO Center Tracking: Target right (dx={delta_x:.0f}) -> Curve Right"
+        else:
+            # 精確對準中心 (±35 像素) -> 直向前進 (200, 200)
+            self.command = (200, 200)
+            self.reason = f"🎯 YOLO Center Tracking: Target Centered (dx={delta_x:.0f}) -> Drive Forward"
+
         return self.command
 
     def tick(self, target, motor_status):
@@ -100,42 +132,25 @@ class AutoController:
             distance = motor_status["distance_cm"]
 
             # -------------------------------------------------------------
-            # IDLE 狀態：執行寵物自由漫遊與超聲波自動避障 (Pet Free Wandering)
+            # AUTO 模式下優先檢測：若 YOLO 辨識到拖鞋，優先進行中心追蹤 (YOLO Center Tracking)
             # -------------------------------------------------------------
-            if self.state == "IDLE":
+            if target is not None:
+                return self._track_target(target, distance)
+
+            # -------------------------------------------------------------
+            # IDLE / 無目標狀態：執行寵物自由漫遊與 65cm 超聲波自動避障
+            # -------------------------------------------------------------
+            if self.state in ("IDLE", "SEARCH_PAUSE", "SEARCH_TURN"):
                 cmd, wander_reason = self.pet_wander.tick(distance)
                 self.command = cmd
                 self.reason = wander_reason
                 return self.command
 
-            # -------------------------------------------------------------
-            # 音訊 / 視覺觸發的尋物任務流程 (Mission Mode)
-            # -------------------------------------------------------------
-            if self.state == "SEARCH_TURN":
-                if target is not None:
-                    self._transition("FORWARD", now, "shoe detected")
-                    return self._forward(distance)
-                if elapsed >= self.rotate_step_seconds:
-                    self.scan_steps += 1
-                    self._transition("SEARCH_PAUSE", now, "45 degree step complete")
-                    return self._stop("camera pause")
-                self.command = (-self.pivot_pwm, self.pivot_pwm)
-                self.reason = f"scan step {self.scan_steps + 1}"
-                return self.command
-
-            if self.state == "SEARCH_PAUSE":
-                if target is not None:
-                    self._transition("FORWARD", now, "shoe detected")
-                    return self._forward(distance)
-                if elapsed >= self.scan_pause_seconds:
-                    self._transition("SEARCH_TURN", now, "continue scan")
-                return self._stop("camera pause")
-
             if self.state == "FORWARD":
                 if elapsed >= self.forward_seconds:
                     self._transition("DONE", now, "timed forward run complete")
                     return self._stop(self.reason)
-                return self._forward(distance)
+                return self._track_target(target, distance) if target is not None else self._stop(self.reason)
 
             self._transition("FAILED", now, "unknown state")
             return self._stop(self.reason)
