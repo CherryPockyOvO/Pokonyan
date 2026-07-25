@@ -8,11 +8,12 @@ import time
 class ManualController:
     """Manual control handling WASD and combination key commands."""
 
-    def __init__(self, forward_pwm=250, pivot_pwm=200, inner_pwm=100):
+    def __init__(self, forward_pwm=200, backward_pwm=100, pivot_pwm=120, inner_pwm=100):
         self.lock = threading.Lock()
         self.command = (0, 0)
         self.reason = "manual standby"
         self.forward_pwm = forward_pwm
+        self.backward_pwm = backward_pwm
         self.pivot_pwm = pivot_pwm
         self.inner_pwm = inner_pwm
         self.last_cmd_at = time.monotonic()
@@ -22,35 +23,36 @@ class ManualController:
         with self.lock:
             now = time.monotonic()
             self.last_cmd_at = now
-            pwm = self.forward_pwm     # 250
-            pivot = self.pivot_pwm   # 200
-            inner = self.inner_pwm   # 150
+            f_pwm = self.forward_pwm   # 200
+            b_pwm = self.backward_pwm  # 100
+            pivot = self.pivot_pwm     # 120
+            inner = self.inner_pwm     # 100
 
             # 組合鍵判斷
             if cmd in ("WD", "DW"):
-                self.command = (pwm, inner)
+                self.command = (f_pwm, inner)
                 self.reason = "manual forward-right (WD)"
             elif cmd in ("WA", "AW"):
-                self.command = (inner, pwm)
+                self.command = (inner, f_pwm)
                 self.reason = "manual forward-left (WA)"
             elif cmd in ("SD", "DS"):
-                self.command = (-pwm, -inner)
+                self.command = (-b_pwm, -int(inner * 0.5))
                 self.reason = "manual backward-right (SD)"
             elif cmd in ("SA", "AS"):
-                self.command = (-inner, -pwm)
+                self.command = (-int(inner * 0.5), -b_pwm)
                 self.reason = "manual backward-left (SA)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
-                self.command = (pwm, pwm)
+                self.command = (f_pwm, f_pwm)     # (200, 200)
                 self.reason = "manual forward (W)"
             elif cmd in ("S", "BACKWARD"):
-                self.command = (-pwm, -pwm)
+                self.command = (-b_pwm, -b_pwm)   # (-100, -100)
                 self.reason = "manual backward (S)"
             elif cmd in ("A", "LEFT"):
-                self.command = (-pivot, pivot)
+                self.command = (-pivot, pivot)    # (-120, 120)
                 self.reason = "manual turn left (A)"
             elif cmd in ("D", "RIGHT"):
-                self.command = (pivot, -pivot)
+                self.command = (pivot, -pivot)    # (120, -120)
                 self.reason = "manual turn right (D)"
             elif cmd in ("B", "STOP", "BRAKE"):
                 self.command = (0, 0)

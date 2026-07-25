@@ -46,12 +46,12 @@ inline void handleSerialComm() {
   }
 }
 
-// 🎯 3. 每隔 100ms 經由串口發送超聲波距離給樹莓派 ('D <distance_cm>')
+// 🎯 3. 每隔 50ms (20Hz) 經由串口發送超聲波距離給樹莓派 ('D <distance_cm>')
 inline void sendSerialTelemetry() {
   static unsigned long lastTelemetryAt = 0;
   unsigned long now = millis();
 
-  if (now - lastTelemetryAt >= 100) {
+  if (now - lastTelemetryAt >= 50) {
     lastTelemetryAt = now;
     Serial.print(F("D "));
     if (distanceCm < 0) {

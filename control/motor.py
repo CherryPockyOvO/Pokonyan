@@ -19,7 +19,7 @@ RELEASE = 4
 class MotorGateway:
     """Serial (UART) Motor Gateway communicating with Arduino Mega over USB/Serial (/dev/ttyACM0)."""
 
-    def __init__(self, port="/dev/ttyACM0", baudrate=115200, heartbeat_hz=15, dry_run=False, address=None, bus_id=None):
+    def __init__(self, port="/dev/ttyACM0", baudrate=115200, heartbeat_hz=20, dry_run=False, address=None, bus_id=None):
         self.port = port or "/dev/ttyACM0"
         self.baudrate = baudrate
         self.heartbeat_hz = heartbeat_hz
