@@ -190,6 +190,7 @@ def main():
             emergency_stop=emergency_stop,
             set_mode_callback=manager.set_mode,
             manual_cmd_callback=manager.handle_manual_command,
+            audio_event_callback=audio_event,
             host="0.0.0.0",
             port=args.port,
         )

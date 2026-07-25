@@ -10,13 +10,15 @@
 
 ```text
 raspi/Pokonyan/
-├── top.py                     <-- 🎯 主程式入口 (調度與模式切換)
+├── top.py                     <-- 🎯 樹莓派主程式入口 (調度與模式切換)
+├── pc_audio_client.py         <-- 🎙️ PC 電腦端語音客戶端 (減輕樹莓派負擔)
+├── run_remote_pi.sh           <-- 🚀 本地電腦一鍵 SSH 同步 git pull 並啟動全套系統
 ├── README.md                  <-- 本說明文件
 │
 ├── control/                   <-- 🕹️ 控制模組
 │   ├── __init__.py
 │   ├── auto_controller.py     <-- 自動模式狀態機 (AutoController)
-│   ├── manual_controller.py   <-- 手動模式 WASD 遙控 (ManualController)
+│   ├── manual_controller.py   <-- 手動模式 8 方向遙控 (ManualController)
 │   └── motor.py               <-- Arduino Mega 串口 (UART) 底盤通訊門戶 (MotorGateway)
 │
 ├── perception/                <-- 👁️ 聲學與視覺感知模組
@@ -29,8 +31,25 @@ raspi/Pokonyan/
 │   └── web_server.py          <-- Web 視訊流與 WASD 雙模式頁面 (WebStreamServer)
 │
 └── model/                     <-- 🧠 AI 模型資料夾
-    └── best_ncnn_model/       <-- YOLO 視覺辨識模型
+    ├── best_ncnn_model/       <-- YOLO 視覺辨識模型
+    └── yamnet.tflite          <-- 聲音事件辨識模型
 ```
+
+---
+
+## 💻 語音分流與 PC 端自動化架構 (PC Audio Offload)
+
+為了減輕樹莓派 5 運行 Whisper / YAMNet 的負擔，聲音處理可**分離部署於本地 PC/Mac 電腦上**：
+
+```mermaid
+flowchart LR
+    LocalPC[💻 本地 PC/Mac (pc_audio_client.py)] -->|16kHz 麥克風音訊| AI[YAMNet + Whisper]
+    AI -- 聽見鬧鐘聲 (HTTP POST) --> Pi[🤖 樹莓派 5 (top.py --no-audio)]
+    Pi -->|串口 Serial| Arduino[⚡ Arduino Mega 2560]
+```
+
+1. **樹莓派**：運行輕量化 `top.py --no-audio`（專注視覺與串口底盤操控）。
+2. **PC 電腦**：運行 `pc_audio_client.py`，使用電腦麥克風執行 YAMNet / Whisper，聽見鬧鐘時自動發送 HTTP POST `/trigger_audio_event` 給樹莓派。
 
 ---
 
@@ -59,36 +78,27 @@ raspi/Pokonyan/
    * 視覺（YOLO 識別）自動對準與追蹤拖鞋。
 2. **🎮 MANUAL 手動模式**：
    * 停用聲音自動觸發。
-   * 透過 Web UI 畫面按鈕或鍵盤 **`W` (前進)、`S` (後退)、`A` (左轉)、`D` (右轉)、`B` (煞車)** 即時遙控小車。
+   * 支援 8 方向鍵盤與 Web UI 操作：`W` (前進)、`S` (後退)、`A` (左轉)、`D` (右轉)、`WD` (右前)、`WA` (左前)、`SD` (右後)、`SA` (左後)、`B` (煞車)。
 
 ---
 
 ## 🚀 快速啟動指南
 
-### 1. 安裝樹莓派依賴環境
+### 1. 一鍵 SSH 自動同步 git pull 並啟動全套系統 (PC 端執行)
+在本地電腦終端機直接執行：
 ```bash
-pip install pyserial opencv-python ultralytics numpy sounddevice scipy
+./run_remote_pi.sh Milos-Pi5.local
 ```
-
-### 2. 執行主程式
-```bash
-python3 top.py --serial /dev/ttyACM0
-```
-
-* **模擬鬧鐘測試**：
-  ```bash
-  python3 top.py --simulate-alarm
-  ```
-* **無硬體測試 (Dry-Run)**：
-  ```bash
-  python3 top.py --dry-run
-  ```
+此腳本會自動：
+1. SSH 連線至 `xzm@Milos-Pi5.local`。
+2. 在樹莓派上執行 `git fetch origin main && git reset --hard origin/main` 獲取最新代碼。
+3. 在樹莓派上啟動 `python3 top.py --no-audio`。
+4. 在本地電腦自動啟動 `pc_audio_client.py` 進行語音分流處理。
 
 ---
 
 ## 🌐 Web 監視器存取
 
-瀏覽器開啟：`http://<RaspberryPi-IP>:8080/`
+瀏覽器開啟：`http://Milos-Pi5.local:8080/`
 * 即時檢視相機 YOLO 視訊流與辨識框。
-* 實時顯示超聲波距離、Arduino 串口連線狀態與音訊分析文字。
-* 提供一鍵緊急停止按鈕。
+* 實時顯示超聲波距離、Arduino 串口連線狀態與 8 方向操控介面。

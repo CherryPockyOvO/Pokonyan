@@ -285,6 +285,21 @@ class StreamingHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
             return
 
+        if path == "/trigger_audio_event":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode("utf-8")) if body else {}
+                event = data.get("event", "alarm")
+                score = float(data.get("score", 1.0))
+                callback = type(self).audio_event_callback
+                if callback is not None:
+                    callback(event, score)
+                self._json(200, {"ok": True, "event": event, "score": score})
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+            return
+
         self.send_error(404)
 
 
@@ -301,6 +316,7 @@ class WebStreamServer:
         emergency_stop=None,
         set_mode_callback=None,
         manual_cmd_callback=None,
+        audio_event_callback=None,
         host="0.0.0.0",
         port=8080,
     ):
@@ -310,6 +326,7 @@ class WebStreamServer:
         StreamingHandler.emergency_stop = emergency_stop
         StreamingHandler.set_mode_callback = set_mode_callback
         StreamingHandler.manual_cmd_callback = manual_cmd_callback
+        StreamingHandler.audio_event_callback = audio_event_callback
         self.server = RobotHTTPServer((host, port), StreamingHandler)
         self.thread = None
         self.host = host
