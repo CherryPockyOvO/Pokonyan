@@ -1,10 +1,7 @@
-# ---- Model / Large Binary Files ----
-*.bin
-*.tflite
-*.onnx
-*.ncnn.bin
-*.ncnn.param
-best_ncnn_model/
+# ---- Model Files (Allow NCNN models in repo) ----
+# Allow model directory files
+!model/
+!model/**
 
 # ---- Audio Files ----
 *.wav
