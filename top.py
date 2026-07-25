@@ -53,6 +53,7 @@ class RobotDualModeManager:
                     self.manual_ctrl.handle_command("B")
                 else:
                     self.manual_ctrl.emergency_stop()
+                    self.auto_ctrl.reset()
             return True
 
     def handle_manual_command(self, cmd):

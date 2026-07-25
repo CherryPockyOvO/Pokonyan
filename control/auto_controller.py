@@ -63,6 +63,15 @@ class AutoController:
             self.command = (0, 0)
             self.pet_wander.reset()
 
+    def reset(self):
+        with self.lock:
+            self.alert = ""
+            self.alert_score = 0.0
+            self.scan_steps = 0
+            self.command = (0, 0)
+            self._transition("IDLE", time.monotonic(), "reset to IDLE (AUTO mode)")
+            self.pet_wander.reset()
+
     def _stop(self, reason):
         self.command = (0, 0)
         self.reason = reason
