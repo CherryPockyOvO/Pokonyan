@@ -36,8 +36,7 @@ void loop() {
   if (now - lastRangeAt >= 50) {
     lastRangeAt = now;
     readUltrasonic();
+    sendSerialTelemetry();
   }
 
-  // 3. 發送超聲波遙測數據給樹莓派 (D distanceCm)
-  sendSerialTelemetry();
 }

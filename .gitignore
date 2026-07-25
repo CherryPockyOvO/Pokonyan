@@ -1,7 +1,10 @@
-# ---- Model Files (Allow NCNN models in repo) ----
-# Allow model directory files
+# ---- Model Files (Allow NCNN, TFLite, and binary models in repo) ----
 !model/
 !model/**
+!*.tflite
+!*.bin
+!*.ncnn.bin
+!*.ncnn.param
 
 # ---- Audio Files ----
 *.wav
