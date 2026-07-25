@@ -78,10 +78,11 @@ class AutoController:
         return self.command
 
     def _forward(self, distance):
-        near = distance is not None and distance <= self.slow_distance_cm
+        valid = distance is not None and distance > 0.0
+        near = valid and distance <= self.slow_distance_cm
         pwm = self.slow_pwm if near else self.forward_pwm
         self.command = (pwm, pwm)
-        self.reason = "distance at or below 15 cm" if near else "timed forward run"
+        self.reason = f"distance at or below {self.slow_distance_cm:.0f} cm" if near else "timed forward run"
         return self.command
 
     def tick(self, target, motor_status):

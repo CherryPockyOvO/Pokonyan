@@ -105,11 +105,12 @@ class PetWanderController:
         """核心週期函數：傳入即時超聲波距離，返回馬達速度指令 (pwml, pwmr) 與原因。"""
         now = time.monotonic()
         with self.lock:
-            is_obstacle = (
+            # 🎯 特判 -1.0 與無效數據：-1.0 表示無障礙物/超出量程/感測器超時
+            valid_distance = (
                 distance_cm is not None
-                and distance_cm > 0.0
-                and distance_cm <= self.obstacle_dist_cm
+                and distance_cm > 0.0  # 過濾 -1.0 與 0.0
             )
+            is_obstacle = valid_distance and (distance_cm <= self.obstacle_dist_cm)
 
             # -------------------------------------------------------------
             # 1. 65cm 超聲波自動避障模式 (單純左轉 A: -160, 165 或右轉 D: 175, -175)
@@ -121,10 +122,9 @@ class PetWanderController:
                     self.avoid_direction = random.choice(["A", "D"])
                     self.avoid_start_time = now
 
-                # 判斷道路是否恢復清空 (超聲波 >= 70cm 且轉動超過最小時間 0.4s)
+                # 判斷道路是否恢復清空 (若超聲波為 -1.0/無效 或 >= 70cm，且轉動超過最小時間 0.4s)
                 path_cleared = (
-                    distance_cm is not None
-                    and distance_cm >= self.clear_dist_cm
+                    (not valid_distance or distance_cm >= self.clear_dist_cm)
                     and (now - self.avoid_start_time >= 0.4)
                 )
 

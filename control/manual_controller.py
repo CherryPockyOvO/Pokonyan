@@ -20,7 +20,7 @@ class ManualController:
             now = time.monotonic()
             self.last_cmd_at = now
 
-            # 組合鍵判斷 (240 上限動態等級微調)
+            # 組合鍵判斷 (240 前進 / 200 後退動態等級)
             if cmd in ("WD", "DW"):
                 self.command = (240, 80)          # 右前弧線 (左輪240, 右輪80)
                 self.reason = "manual forward-right (WD: 240, 80)"
@@ -28,18 +28,18 @@ class ManualController:
                 self.command = (75, 240)          # 左前弧線 (左輪75, 右輪240)
                 self.reason = "manual forward-left (WA: 75, 240)"
             elif cmd in ("SD", "DS"):
-                self.command = (-180, -70)        # 右後弧線 (左輪-180, 右輪-70)
-                self.reason = "manual backward-right (SD: -180, -70)"
+                self.command = (-200, -80)        # 右後弧線 (左輪-200, 右輪-80)
+                self.reason = "manual backward-right (SD: -200, -80)"
             elif cmd in ("SA", "AS"):
-                self.command = (-100, -180)       # 左後弧線 (左輪-100, 右輪-180)
-                self.reason = "manual backward-left (SA: -100, -180)"
+                self.command = (-110, -200)       # 左後弧線 (左輪-110, 右輪-200)
+                self.reason = "manual backward-left (SA: -110, -200)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
                 self.command = (240, 240)         # 直向前進 (240, 240)
                 self.reason = "manual forward (W: 240, 240)"
             elif cmd in ("S", "BACKWARD"):
-                self.command = (-180, -180)       # 直線後退 (-180, -180)
-                self.reason = "manual backward (S: -180, -180)"
+                self.command = (-200, -200)       # 直線後退 (-200, -200)
+                self.reason = "manual backward (S: -200, -200)"
             elif cmd in ("A", "LEFT"):
                 self.command = (-160, 165)        # 左拐 (-160, 165)
                 self.reason = "manual turn left (A: -160, 165)"
