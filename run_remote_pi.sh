@@ -3,7 +3,8 @@
 # and start local PC Audio Node.
 
 PI_USER="xzm"
-PI_HOST="Milos-Pi5.local"
+PI_HOST="100.80.242.72"
+PI_PASS="123456"
 PI_DIR="~/Pokonyan"
 
 if [ -n "$1" ]; then
@@ -14,7 +15,12 @@ echo "=========================================================="
 echo "🚀 1. Syncing latest GitHub repo on Raspberry Pi ($PI_USER@$PI_HOST)..."
 echo "=========================================================="
 
-ssh "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio" &
+SSH_CMD="ssh"
+if command -v sshpass >/dev/null 2>&1; then
+    SSH_CMD="sshpass -p $PI_PASS ssh"
+fi
+
+$SSH_CMD "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio" &
 PI_PID=$!
 
 sleep 3

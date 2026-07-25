@@ -52,7 +52,7 @@ def send_event_to_pi(pi_host, port, event, score):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pi-host", default="Milos-Pi5.local", help="Raspberry Pi hostname or IP (default: Milos-Pi5.local)")
+    parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi hostname or IP (default: 100.80.242.72)")
     parser.add_argument("--port", type=int, default=8080, help="Raspberry Pi web server port (default: 8080)")
     parser.add_argument("--yamnet", default="model/yamnet.tflite")
     parser.add_argument("--whisper", default="model/ggml-tiny.en.bin")
