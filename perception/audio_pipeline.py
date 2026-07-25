@@ -40,9 +40,18 @@ except ImportError:
         try:
             from tensorflow.lite import Interpreter
             LITE_ENGINE = "tensorflow.lite"
-        except ImportError:
-            Interpreter = None
-            LITE_ENGINE = "unavailable"
+        except (ImportError, AttributeError):
+            try:
+                import tensorflow as tf
+                Interpreter = tf.lite.Interpreter
+                LITE_ENGINE = "tensorflow.lite.Interpreter"
+            except (ImportError, AttributeError):
+                try:
+                    from tensorflow.lite.python.interpreter import Interpreter
+                    LITE_ENGINE = "tensorflow.lite.python.interpreter"
+                except ImportError:
+                    Interpreter = None
+                    LITE_ENGINE = "unavailable"
 
 # ---------------------------------------------------------------------------
 # Whisper C++
