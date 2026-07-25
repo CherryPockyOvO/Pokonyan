@@ -26,7 +26,7 @@ class YoloDetectorEngine:
         confidence=0.35,
         alpha=0.35,
         detection_hold_seconds=0.6,
-        min_consecutive_hits=5,
+        min_consecutive_hits=3,
     ):
         self.model_path = Path(model_path).expanduser().resolve()
         self.target_video_fps = target_video_fps

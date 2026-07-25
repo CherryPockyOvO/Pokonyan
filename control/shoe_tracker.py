@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Autonomous Shoe Tracking Controller with Bounding Box Center Anti-Jitter Smoothing & Obstacle Avoidance."""
+"""Autonomous Shoe Tracking Controller with Pulse-Steering & Shoe Obstacle Exemption."""
 
-import random
 import threading
 import time
 
 
 class ShoeTrackerController:
     """Shoe Tracking Controller using YOLO bounding box center, low-pass anti-jitter filter,
-    gentle steering angle limits, and ultrasonic obstacle avoidance.
+    step/pulse-based turn control (0.15s pulse + 0.10s pause), and intelligent shoe obstacle exemption.
     
     Features:
-    1. Exponential moving average (Low-Pass Filter) on target center offset (dx) to eliminate steering jitter.
-    2. Reduced turn intensity (gentle curved speeds) to prevent overshooting caused by camera latency.
-    3. Ultrasonic obstacle avoidance during tracking:
-       - Avoids walls/obstacles if distance <= 65cm.
-       - Exception: Stops cleanly if the obstacle IS the shoe itself (distance <= 15cm or shoe takes over 65% of screen height).
+    1. Low-Pass Exponential Anti-Jitter Filter on target center offset (dx).
+    2. Timed Step/Pulse Steering (0.15s turn pulse + 0.10s camera pause) to eliminate low-PWM stalling & overshooting.
+    3. Shoe Obstacle Exemption: When the shoe is centered in front (abs(dx) <= 100px), ultrasonic distance <= 65cm
+       is recognised as the target shoe itself, so obstacle evasion is bypassed and the robot drives straight into the shoe!
     """
 
     def __init__(
@@ -25,7 +23,9 @@ class ShoeTrackerController:
         smoothing_alpha=0.3,
         obstacle_dist_cm=65.0,
         stop_dist_cm=15.0,
-        full_shoe_height_ratio=0.65,
+        full_shoe_height_ratio=0.60,
+        pulse_duration_sec=0.15,
+        pulse_pause_sec=0.10,
     ):
         self.lock = threading.Lock()
         self.target_center_x = target_center_x
@@ -34,24 +34,36 @@ class ShoeTrackerController:
         self.obstacle_dist_cm = obstacle_dist_cm
         self.stop_dist_cm = stop_dist_cm
         self.full_shoe_height_ratio = full_shoe_height_ratio
+        self.pulse_duration_sec = pulse_duration_sec
+        self.pulse_pause_sec = pulse_pause_sec
 
         self.smoothed_dx = 0.0
         self.has_smoothed = False
         self.evading_obstacle = False
         self.evade_direction = "A"
         self.evade_start_at = 0.0
+
+        # 脈衝步進轉向狀態機 (Pulse Step Steering State)
+        self.pulse_state = "IDLE"  # "IDLE", "PULSING", "PAUSING"
+        self.pulse_cmd = (0, 0)
+        self.pulse_until = 0.0
+        self.pause_until = 0.0
         self.reason = "Shoe tracker initialized"
 
     def reset(self):
-        """重置追蹤器平滑狀態與避障狀態。"""
+        """重置追蹤器狀態與步進脈衝狀態。"""
         with self.lock:
             self.smoothed_dx = 0.0
             self.has_smoothed = False
             self.evading_obstacle = False
+            self.pulse_state = "IDLE"
+            self.pulse_cmd = (0, 0)
+            self.pulse_until = 0.0
+            self.pause_until = 0.0
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：傳入 YOLO 目標 target 與即時超聲波距離 distance_cm。"""
+        """核心追蹤週期函數：傳入 YOLO 目標與即時超聲波距離。"""
         now = time.monotonic()
         with self.lock:
             if target is None:
@@ -62,7 +74,7 @@ class ShoeTrackerController:
             height_ratio = target.get("height_ratio", 0.0)
 
             # -------------------------------------------------------------
-            # 1. 低通指數平滑消抖算法 (Low-Pass Exponential Filter for Anti-Jitter)
+            # 1. 低通指數平滑消抖算法 (Low-Pass Exponential Anti-Jitter Filter)
             # -------------------------------------------------------------
             if not self.has_smoothed:
                 self.smoothed_dx = raw_dx
@@ -72,6 +84,7 @@ class ShoeTrackerController:
 
             dx = self.smoothed_dx
             valid_dist = distance_cm is not None and distance_cm > 0.0
+            shoe_centered = abs(dx) <= 100.0  # 鞋子在視角正前方範圍內
 
             # -------------------------------------------------------------
             # 2. 抵達鞋子特判 (撞到鞋子 / 畫面滿屏鞋子 / 超聲波 <= 15cm)
@@ -86,14 +99,14 @@ class ShoeTrackerController:
                 return (0, 0), self.reason
 
             # -------------------------------------------------------------
-            # 3. 追蹤過程中的超聲波自動避障 (非鞋子障礙物避障)
+            # 3. 智能超聲波自動避障 (鞋子居中時免除避障，避免把鞋子當障礙物)
             # -------------------------------------------------------------
-            is_obstacle = valid_dist and (distance_cm <= self.obstacle_dist_cm)
+            # 只有當「鞋子不在視角正前方 (dx > 100px)」且「前方距離 <= 65cm」時才觸發避障！
+            is_side_obstacle = valid_dist and (distance_cm <= self.obstacle_dist_cm) and not shoe_centered
 
-            if is_obstacle or self.evading_obstacle:
+            if is_side_obstacle or self.evading_obstacle:
                 if not self.evading_obstacle:
                     self.evading_obstacle = True
-                    # 優先根據偏離方向避障：若鞋子在左邊則向左轉避開右側障礙，反之亦然
                     self.evade_direction = "A" if dx < 0 else "D"
                     self.evade_start_at = now
 
@@ -105,37 +118,58 @@ class ShoeTrackerController:
                 if path_cleared:
                     self.evading_obstacle = False
                 else:
-                    if self.evade_direction == "A":
-                        cmd = (-140, 140)
-                        dir_str = "Spin Left (A: -140, 140)"
-                    else:
-                        cmd = (150, -150)
-                        dir_str = "Spin Right (D: 150, -150)"
-                    self.reason = f"🚨 Obstacle while tracking ({distance_cm:.1f}cm <= 65cm) -> Evading: {dir_str}"
+                    cmd = (-160, 165) if self.evade_direction == "A" else (175, -175)
+                    dir_str = "Spin Left (-160, 165)" if self.evade_direction == "A" else "Spin Right (175, -175)"
+                    self.reason = f"🚨 Side Obstacle ({distance_cm:.1f}cm <= 65cm) -> Evading: {dir_str}"
                     return cmd, self.reason
 
             # -------------------------------------------------------------
-            # 4. 溫和減小轉向幅度 (防止延遲導致過度轉向與擺動)
+            # 4. 步進式小幅度脈衝轉向控制 (Step / Pulse Steering Control)
             # -------------------------------------------------------------
-            if dx < -90.0:
-                # 較大偏左 -> 溫和原地左轉 (-90, 140) 減小轉動震盪
-                cmd = (-90, 140)
-                self.reason = f"🎯 Tracking: Target Far Left (smoothed dx={dx:.1f}) -> Soft Spin Left"
-            elif dx < -self.deadband_px:
-                # 輕微偏左 -> 平滑弧線左前 (120, 220)
-                cmd = (120, 220)
-                self.reason = f"🎯 Tracking: Target Left (smoothed dx={dx:.1f}) -> Gentle Curve Left"
-            elif dx > 90.0:
-                # 較大偏右 -> 溫和原地右轉 (140, -90) 減小轉動震盪
-                cmd = (140, -90)
-                self.reason = f"🎯 Tracking: Target Far Right (smoothed dx={dx:.1f}) -> Soft Spin Right"
-            elif dx > self.deadband_px:
-                # 輕微偏右 -> 平滑弧線右前 (220, 120)
-                cmd = (220, 120)
-                self.reason = f"🎯 Tracking: Target Right (smoothed dx={dx:.1f}) -> Gentle Curve Right"
-            else:
-                # 精確對準中心 (±30px 死區) -> 全速直向前進 (200, 200)
-                cmd = (200, 200)
-                self.reason = f"🎯 Tracking: Centered (smoothed dx={dx:.1f}) -> Drive Forward"
+            # A) 處理步進脈衝中的動作 (PULSING)
+            if self.pulse_state == "PULSING":
+                if now < self.pulse_until:
+                    return self.pulse_cmd, self.reason
+                else:
+                    # 脈衝結束，進入簡短停頓讓相機與視覺讀取新幀 (PAUSING)
+                    self.pulse_state = "PAUSING"
+                    self.pause_until = now + self.pulse_pause_sec
+                    return (0, 0), "🎯 Tracking: Steering pulse pause (reading frame)"
 
-            return cmd, self.reason
+            # B) 處理步進脈衝間隔停頓 (PAUSING)
+            if self.pulse_state == "PAUSING":
+                if now < self.pause_until:
+                    return (0, 0), "🎯 Tracking: Steering pulse pause (reading frame)"
+                else:
+                    self.pulse_state = "IDLE"
+
+            # C) 精確對準中心 (±30px 死區) -> 全速直向前進
+            if abs(dx) <= self.deadband_px:
+                cmd = (200, 200)
+                self.reason = f"🎯 Tracking: Centered (dx={dx:.1f}) -> Driving Forward"
+                return cmd, self.reason
+
+            # D) 觸發新的小幅度步進轉向脈衝 (0.15s 強力轉向 + 0.10s 觀察)
+            if dx < -90.0:
+                # 大幅偏左 -> 0.15s 原地左轉步進
+                cmd = (-160, 165)
+                act_name = "Step Spin Left (-160, 165)"
+            elif dx < -self.deadband_px:
+                # 輕微偏左 -> 0.18s 弧線左前步進
+                cmd = (90, 240)
+                act_name = "Step Curve Left (90, 240)"
+            elif dx > 90.0:
+                # 大幅偏右 -> 0.15s 原地右轉步進
+                cmd = (175, -175)
+                act_name = "Step Spin Right (175, -175)"
+            else:
+                # 輕微偏右 -> 0.18s 弧線右前步進
+                cmd = (240, 90)
+                act_name = "Step Curve Right (240, 90)"
+
+            self.pulse_state = "PULSING"
+            self.pulse_cmd = cmd
+            self.pulse_until = now + (0.18 if abs(dx) <= 90 else self.pulse_duration_sec)
+            self.reason = f"🎯 Tracking: {act_name} (dx={dx:.1f})"
+
+            return self.pulse_cmd, self.reason
