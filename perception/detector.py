@@ -21,12 +21,12 @@ class YoloDetectorEngine:
     def __init__(
         self,
         model_path="best_ncnn_model",
-        target_video_fps=20,
+        target_video_fps=30,
         infer_fps=10,
         confidence=0.35,
         alpha=0.35,
         detection_hold_seconds=0.6,
-        min_consecutive_hits=3,
+        min_consecutive_hits=2,
     ):
         self.model_path = Path(model_path).expanduser().resolve()
         self.target_video_fps = target_video_fps
@@ -156,11 +156,12 @@ class YoloDetectorEngine:
         target = None
         if self.smoothed_boxes:
             self.consecutive_hits += 1
+            # 當同時出現多個鞋子時：優先自動跟蹤最右邊的那隻鞋子 (center_x 最大)
             best = max(
                 self.smoothed_boxes,
                 key=lambda box: (
-                    max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1]),
-                    box[4],
+                    (box[0] + box[2]) / 2.0,  # 最右側中心點 center_x
+                    box[4],                   # 置信度 confidence
                 ),
             )
             x1, y1, x2, y2, confidence, _ = best
