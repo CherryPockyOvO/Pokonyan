@@ -2,7 +2,7 @@
 
 基於樹莓派 5 (Raspberry Pi 5) 與 Arduino Mega 2560 的全功能智慧尋物機器人專案。
 
-本專案整合了 **AI 聲音辨識 (YAMNet + Whisper)**、**YOLO 視覺檢測**、**Arduino I2C 底盤控制 (0x08)** 及 **Web 雙模式 (AUTO / MANUAL) 遙控介面**。
+本專案整合了 **AI 聲音辨識 (YAMNet + Whisper)**、**YOLO 視覺檢測**、**Arduino 串口 Serial (UART) 底盤控制** 及 **Web 雙模式 (AUTO / MANUAL) 遙控介面**。
 
 ---
 
@@ -12,13 +12,12 @@
 raspi/Pokonyan/
 ├── top.py                     <-- 🎯 主程式入口 (調度與模式切換)
 ├── README.md                  <-- 本說明文件
-├── monitor.py                 <-- 系統硬體狀態監測腳本
 │
 ├── control/                   <-- 🕹️ 控制模組
 │   ├── __init__.py
 │   ├── auto_controller.py     <-- 自動模式狀態機 (AutoController)
 │   ├── manual_controller.py   <-- 手動模式 WASD 遙控 (ManualController)
-│   └── motor.py               <-- Arduino Mega I2C 底盤通訊門戶 (MotorGateway)
+│   └── motor.py               <-- Arduino Mega 串口 (UART) 底盤通訊門戶 (MotorGateway)
 │
 ├── perception/                <-- 👁️ 聲學與視覺感知模組
 │   ├── __init__.py
@@ -31,29 +30,23 @@ raspi/Pokonyan/
 │
 └── model/                     <-- 🧠 AI 模型資料夾
     └── best_ncnn_model/       <-- YOLO 視覺辨識模型
-    ├── (yamnet.tflite)        <-- 聲音事件辨識模型
-    └── (ggml-tiny.en.bin)     <-- Whisper 語音轉文字模型
 ```
 
 ---
 
-## 🔌 樹莓派與 Arduino Mega I2C 接線與協定
+## 🔌 樹莓派與 Arduino Mega 串口 (UART) 接線與協定
 
-### 1. 腳位接線
+### 1. 接線方式
+使用 USB Type-A 轉 Type-B 傳輸線直接連接樹莓派 USB 埠與 Arduino Mega 的 USB 序列埠（預設序列埠 `/dev/ttyACM0`，波特率 `115200`）。
 
-| 樹莓派 Pin | Arduino Mega 2560 Pin | 說明 |
-| :--- | :--- | :--- |
-| **SDA (GPIO 2 / Pin 3)** | **Pin 20 (SDA)** | I2C 數據線 |
-| **SCL (GPIO 3 / Pin 5)** | **Pin 21 (SCL)** | I2C 時鐘線 |
-| **GND (Pin 6 / GND)** | **GND** | **共地 (必接)** |
+### 2. 串口通訊協定 (Serial Protocol)
 
-### 2. I2C 通訊協定 (位址 `0x08`)
-
-* **指令發送 (Master -> Slave)**：
-  發送 `0x01` 協議連同 4 位元組參數 `[pwml, pwmr, dirL, dirR]` 傳給 Arduino `control()` 函數。
-  * `dir`: `1` = FORWARD, `2` = BACKWARD, `4` = RELEASE
-* **數據索取 (Master <- Slave)**：
-  請求 4 位元組 float，讀取即時超聲波距離 (cm)。
+* **指令發送 (樹莓派 -> Arduino)**：
+  發送 4 位元組運動控制指令：`C <pwml> <pwmr> <dirL> <dirR>\n`
+  * `pwml`, `pwmr`: PWM 數值 `0 ~ 255`
+  * `dirL`, `dirR`: 方向 `1` = FORWARD, `2` = BACKWARD, `4` = RELEASE
+* **數據接收 (樹莓派 <- Arduino)**：
+  讀取 Arduino 印出的即時超聲波距離：`D <distance_cm>\n`
 
 ---
 
@@ -74,12 +67,12 @@ raspi/Pokonyan/
 
 ### 1. 安裝樹莓派依賴環境
 ```bash
-pip install smbus2 opencv-python ultralytics numpy sounddevice scipy
+pip install pyserial opencv-python ultralytics numpy sounddevice scipy
 ```
 
 ### 2. 執行主程式
 ```bash
-python3 top.py
+python3 top.py --serial /dev/ttyACM0
 ```
 
 * **模擬鬧鐘測試**：
@@ -97,5 +90,5 @@ python3 top.py
 
 瀏覽器開啟：`http://<RaspberryPi-IP>:8080/`
 * 即時檢視相機 YOLO 視訊流與辨識框。
-* 實時顯示超聲波距離、Arduino I2C 連線狀態與音訊分析文字。
+* 實時顯示超聲波距離、Arduino 串口連線狀態與音訊分析文字。
 * 提供一鍵緊急停止按鈕。

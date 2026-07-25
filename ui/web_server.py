@@ -102,7 +102,7 @@ async function poll(){
     const t=v.target;
     show('target', t ? 'x=' + t.centre_x.toFixed(2) + ', height=' + t.height_ratio.toFixed(2) : 'not seen');
     show('distance', m.distance_cm == null ? '-' : m.distance_cm.toFixed(1) + ' cm');
-    show('arduino', m.ready ? 'CONNECTED (0x08)' : (m.connected ? 'WAITING' : 'OFFLINE'));
+    show('arduino', m.ready ? 'CONNECTED (Serial)' : (m.connected ? 'WAITING' : 'OFFLINE'));
     show('event', a.event ? (a.event + ' (' + (a.event_score??0).toFixed(2) + ')') : '-');
     show('transcript', a.text || '-');
     show('error', [v.error, a.error, m.error].filter(Boolean).join('\\n'));

@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Raspberry Pi I2C Motor Gateway sending direct control(pwml, pwmr, dirL, dirR) parameters to Arduino Mega Slave (Address 0x08)."""
+"""Raspberry Pi Serial (UART) Motor Gateway sending direct control(pwml, pwmr, dirL, dirR) parameters to Arduino Mega 2560."""
 
-import struct
 import threading
 import time
 
 try:
-    import smbus2 as smbus
+    import serial
 except ImportError:
-    try:
-        import smbus
-    except ImportError:
-        smbus = None
+    serial = None
 
 # AFMotor 方向常數定義 (與 Arduino motor_control.h / AFMotor.h 完全對齊)
 FORWARD = 1
@@ -21,18 +17,18 @@ RELEASE = 4
 
 
 class MotorGateway:
-    """I2C Motor Gateway sending direct 4-parameter control frames to Arduino (Address 0x08)."""
+    """Serial (UART) Motor Gateway communicating with Arduino Mega over USB/Serial (/dev/ttyACM0)."""
 
-    def __init__(self, bus_id=1, address=0x08, heartbeat_hz=15, dry_run=False, port=None):
-        self.bus_id = bus_id
-        self.address = address
+    def __init__(self, port="/dev/ttyACM0", baudrate=115200, heartbeat_hz=15, dry_run=False, address=None, bus_id=None):
+        self.port = port or "/dev/ttyACM0"
+        self.baudrate = baudrate
         self.heartbeat_hz = heartbeat_hz
-        self.dry_run = dry_run or (smbus is None)
+        self.dry_run = dry_run or (serial is None)
 
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         self.thread = None
-        self.bus = None
+        self.ser = None
 
         # (pwml, pwmr, dirL, dirR)
         self.target_frame = (0, 0, RELEASE, RELEASE)
@@ -40,13 +36,13 @@ class MotorGateway:
         self.connected = self.dry_run
         self.ready = self.dry_run
         self.distance_cm = None
-        self.last_i2c_at = time.monotonic() if self.dry_run else 0.0
-        self.error = "" if smbus is not None else "smbus2 module unavailable (dry-run mode)"
+        self.last_serial_at = time.monotonic() if self.dry_run else 0.0
+        self.error = "" if serial is not None else "pyserial module unavailable (dry-run mode)"
 
     def start(self):
         if self.dry_run or self.thread is not None:
             return
-        self.thread = threading.Thread(target=self._service, name="i2c_motor", daemon=True)
+        self.thread = threading.Thread(target=self._service, name="serial_motor", daemon=True)
         self.thread.start()
 
     def _convert_speed_to_frame(self, left_speed, right_speed):
@@ -89,7 +85,7 @@ class MotorGateway:
             changed = frame != self.target_frame
             self.target_frame = frame
         if self.dry_run and changed:
-            print(f"[Motor I2C dry-run] set_target({left}, {right}) -> (pwmL={frame[0]}, pwmR={frame[1]}, dirL={frame[2]}, dirR={frame[3]})")
+            print(f"[Motor Serial dry-run] set_target({left}, {right}) -> (pwmL={frame[0]}, pwmR={frame[1]}, dirL={frame[2]}, dirR={frame[3]})")
 
     def control(self, pwml, pwmr, dir_l, dir_r):
         """直接設置 4 個 control 參數 (0-255, FORWARD=1, BACKWARD=2, RELEASE=4)。"""
@@ -101,44 +97,55 @@ class MotorGateway:
 
     def emergency_stop(self):
         self.control(0, 0, RELEASE, RELEASE)
-        if not self.dry_run and self.bus is not None:
+        if not self.dry_run and self.ser is not None and self.ser.is_open:
             try:
-                self.bus.write_i2c_block_data(self.address, 0x01, [0, 0, RELEASE, RELEASE])
+                self.ser.write(b"C 0 0 4 4\n")
             except Exception:
                 pass
 
-    def _send_i2c_control_frame(self, frame):
-        """直接透過 I2C 發送 0x01 暫存器指令及 4 個參數 [pwml, pwmr, dirL, dirR]。"""
+    def _send_serial_control_frame(self, frame):
+        """透過 Serial 串口發送 4 個參數 'C <pwml> <pwmr> <dirL> <dirR>\n' 給 Arduino。"""
         pwml, pwmr, dirl, dirr = frame
-        payload = [pwml, pwmr, dirl, dirr]
-        self.bus.write_i2c_block_data(self.address, 0x01, payload)
+        cmd_str = f"C {pwml} {pwmr} {dirl} {dirr}\n"
+        self.ser.write(cmd_str.encode("ascii"))
 
-    def _read_i2c_distance(self):
-        """向 Arduino I2C 從機索取 4 位元組的 float 超聲波距離 (cm)。"""
-        try:
-            data = self.bus.read_i2c_block_data(self.address, 0, 4)
-            if len(data) == 4:
-                dist = struct.unpack('<f', bytes(data))[0]
-                return None if dist < 0 else round(dist, 1)
-        except Exception:
-            pass
-        return None
+    def _read_serial_telemetry(self):
+        """讀取 Arduino 串口回傳的超聲波數據 (如 'D 25.4' 或 '25.4')。"""
+        while self.ser.in_waiting > 0:
+            line = self.ser.readline().decode("utf-8", errors="ignore").strip()
+            if not line:
+                continue
+            if line.startswith("D"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        self.distance_cm = float(parts[1])
+                    except ValueError:
+                        pass
+            else:
+                try:
+                    val = float(line)
+                    if 0 <= val <= 500:
+                        self.distance_cm = round(val, 1)
+                except ValueError:
+                    pass
 
     def _service(self):
         period = 1.0 / max(2.0, self.heartbeat_hz)
 
         try:
-            self.bus = smbus.SMBus(self.bus_id)
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
+            time.sleep(2.0)  # 等待 Arduino 串口重置完成
             with self.lock:
                 self.connected = True
                 self.error = ""
-            print(f"[Motor] Connected to Arduino I2C bus {self.bus_id} at address 0x{self.address:02X}")
+            print(f"[Motor] Connected to Arduino Serial port {self.port} at {self.baudrate} baud")
         except Exception as error:
             with self.lock:
                 self.connected = False
                 self.ready = False
-                self.error = f"I2C init error: {error}"
-            print(f"[Motor] I2C bus unavailable: {error}")
+                self.error = f"Serial port init error: {error}"
+            print(f"[Motor] Serial port unavailable: {error}")
             return
 
         last_sent_frame = None
@@ -149,17 +156,16 @@ class MotorGateway:
                 current_frame = self.target_frame
 
             try:
-                # 1. 4 參數 Frame 發生改變時，直接透過 I2C 發送 0x01 [pwml, pwmr, dirL, dirR]
+                # 1. 當 4 參數 Frame 改變時，透過串口發送
                 if current_frame != last_sent_frame:
-                    self._send_i2c_control_frame(current_frame)
+                    self._send_serial_control_frame(current_frame)
                     last_sent_frame = current_frame
 
-                # 2. 定期透過 I2C 讀取 Arduino 的超聲波距離
-                dist = self._read_i2c_distance()
+                # 2. 讀取串口超聲波數據
+                self._read_serial_telemetry()
 
                 with self.lock:
-                    self.distance_cm = dist
-                    self.last_i2c_at = now
+                    self.last_serial_at = now
                     self.ready = True
                     self.connected = True
                     self.error = ""
@@ -167,21 +173,21 @@ class MotorGateway:
             except Exception as error:
                 with self.lock:
                     self.ready = False
-                    self.error = f"I2C comm error: {error}"
+                    self.error = f"Serial comm error: {error}"
 
             time.sleep(period)
 
         self.emergency_stop()
-        if self.bus is not None:
+        if self.ser is not None and self.ser.is_open:
             try:
-                self.bus.close()
+                self.ser.close()
             except Exception:
                 pass
 
     def get_status(self):
         now = time.monotonic()
         with self.lock:
-            age = None if not self.last_i2c_at else now - self.last_i2c_at
+            age = None if not self.last_serial_at else now - self.last_serial_at
             fresh = self.dry_run or (self.ready and age is not None and age <= 1.0)
             pwml, pwmr, dirl, dirr = self.target_frame
             distance = 100.0 if self.dry_run and self.distance_cm is None else self.distance_cm

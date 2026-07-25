@@ -169,7 +169,7 @@ def main():
             detector.start()
 
         if not args.vision_only and not args.audio_only:
-            motor = MotorGateway(dry_run=args.dry_run)
+            motor = MotorGateway(port=args.serial, dry_run=args.dry_run)
             motor.start()
 
         if not args.vision_only and not args.no_audio:
