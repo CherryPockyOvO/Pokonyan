@@ -14,7 +14,7 @@ echo "=========================================================="
 echo "🚀 1. Syncing latest GitHub repo on Raspberry Pi ($PI_USER@$PI_HOST)..."
 echo "=========================================================="
 
-ssh -t "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio" &
+ssh "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio" &
 PI_PID=$!
 
 sleep 3
