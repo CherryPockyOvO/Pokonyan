@@ -13,5 +13,5 @@ echo "=========================================================="
 echo "🚀 Connecting to Raspberry Pi ($PI_USER@$PI_HOST)..."
 echo "=========================================================="
 
-# 使用標準交互式 SSH，手動輸入密碼，並保持在前景運行 top.py
-ssh -t "$PI_USER@$PI_HOST" "pkill -9 -f top.py 2>/dev/null; cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio --dry-run"
+# 使用 pkill ... || true 避免無進程時 exit code 1 導致 SSH 中斷關閉
+ssh -t "$PI_USER@$PI_HOST" "bash -c 'pkill -9 -f top.py 2>/dev/null || true; cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio --dry-run'"
