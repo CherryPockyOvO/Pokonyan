@@ -7,8 +7,10 @@ import signal
 import threading
 import time
 
-from motor import MotorGateway
-from web_server import WebStreamServer
+from control.motor import MotorGateway
+from control.auto_controller import AutoController
+from control.manual_controller import ManualController
+from ui.web_server import WebStreamServer
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -16,129 +18,94 @@ BASE_DIR = Path(__file__).resolve().parent
 
 def local_path(value):
     path = Path(value).expanduser()
-    return path if path.is_absolute() else BASE_DIR / path
+    if path.is_absolute():
+        return path
+    p1 = BASE_DIR / path
+    if p1.exists():
+        return p1
+    p2 = BASE_DIR / "model" / path
+    if p2.exists():
+        return p2
+    if not str(path).startswith("model/"):
+        return BASE_DIR / "model" / path
+    return p1
 
 
-class RobotController:
-    """Small state machine: alert -> initial check/scan -> timed drive."""
+class RobotDualModeManager:
+    """Coordinator managing AUTO mode (AutoController) and MANUAL mode (ManualController)."""
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.state = "IDLE"
-        self.state_since = time.monotonic()
-        self.alert = ""
-        self.alert_score = 0.0
-        self.scan_steps = 0
-        self.command = (0, 0)
-        self.reason = "waiting for alarm"
+        self.mode = "AUTO"  # "AUTO" or "MANUAL"
+        self.auto_ctrl = AutoController(forward_pwm=150, slow_pwm=90, pivot_pwm=120)
+        self.manual_ctrl = ManualController(forward_pwm=150, pivot_pwm=120)
 
-        self.forward_rpm = 60
-        self.slow_rpm = 40
-        self.slow_distance_cm = 15.0
-        self.pivot_rpm = 65
-        self.rotate_step_seconds = 0.45
-        self.scan_pause_seconds = 2.0
-        self.forward_seconds = 10.0
-
-    def _transition(self, state, now, reason):
-        if state != self.state:
-            print(f"[Robot] {self.state} -> {state}: {reason}")
-            self.state = state
-            self.state_since = now
-        self.reason = reason
-
-    def trigger(self, event, score):
-        if event not in ("alarm", "alarm_clock"):
+    def set_mode(self, mode):
+        mode = str(mode).upper()
+        if mode not in ("AUTO", "MANUAL"):
             return False
-        now = time.monotonic()
         with self.lock:
-            if self.state not in ("IDLE", "DONE", "FAILED"):
-                return False
-            self.alert = event
-            self.alert_score = score
-            self.scan_steps = 0
-            self._transition("SEARCH_PAUSE", now, f"initial camera check: {event}")
+            if self.mode != mode:
+                print(f"[Top] Mode changed: {self.mode} -> {mode}")
+                self.mode = mode
+                if mode == "MANUAL":
+                    self.auto_ctrl.emergency_stop()
+                    self.manual_ctrl.handle_command("B")
+                else:
+                    self.manual_ctrl.emergency_stop()
             return True
+
+    def handle_manual_command(self, cmd):
+        if self.mode != "MANUAL":
+            return False
+        return self.manual_ctrl.handle_command(cmd)
+
+    def trigger_alarm(self, event, score):
+        with self.lock:
+            if self.mode != "AUTO":
+                print(f"[Top] Ignored audio event {event}: robot is in MANUAL mode")
+                return False
+            return self.auto_ctrl.trigger(event, score)
 
     def emergency_stop(self):
         with self.lock:
-            self._transition("E_STOP", time.monotonic(), "web/operator emergency stop")
-            self.command = (0, 0)
-
-    def _stop(self, reason):
-        self.command = (0, 0)
-        self.reason = reason
-        return self.command
-
-    def _forward(self, distance):
-        near = distance is not None and distance <= self.slow_distance_cm
-        rpm = self.slow_rpm if near else self.forward_rpm
-        self.command = (rpm, rpm)
-        self.reason = "distance at or below 15 cm" if near else "timed forward run"
-        return self.command
+            self.auto_ctrl.emergency_stop()
+            self.manual_ctrl.emergency_stop()
 
     def tick(self, target, motor_status):
-        now = time.monotonic()
         with self.lock:
-            elapsed = now - self.state_since
-
-            if self.state in ("IDLE", "DONE", "FAILED", "E_STOP"):
-                return self._stop(self.reason)
-
-            if not motor_status["ready"]:
-                self._transition("FAILED", now, "Arduino telemetry unavailable")
-                return self._stop(self.reason)
-
-            distance = motor_status["distance_cm"]
-
-            if self.state == "SEARCH_TURN":
-                if target is not None:
-                    self._transition("FORWARD", now, "shoe detected")
-                    return self._forward(distance)
-                if elapsed >= self.rotate_step_seconds:
-                    self.scan_steps += 1
-                    self._transition("SEARCH_PAUSE", now, "45 degree step complete")
-                    return self._stop("camera pause")
-                self.command = (-self.pivot_rpm, self.pivot_rpm)
-                self.reason = f"scan step {self.scan_steps + 1}"
-                return self.command
-
-            if self.state == "SEARCH_PAUSE":
-                if target is not None:
-                    self._transition("FORWARD", now, "shoe detected")
-                    return self._forward(distance)
-                if elapsed >= self.scan_pause_seconds:
-                    self._transition("SEARCH_TURN", now, "continue scan")
-                return self._stop("camera pause")
-
-            if self.state == "FORWARD":
-                if elapsed >= self.forward_seconds:
-                    self._transition("DONE", now, "timed forward run complete")
-                    return self._stop(self.reason)
-                return self._forward(distance)
-
-            self._transition("FAILED", now, "unknown state")
-            return self._stop(self.reason)
+            if self.mode == "MANUAL":
+                return self.manual_ctrl.tick(motor_status)
+            return self.auto_ctrl.tick(target, motor_status)
 
     def get_status(self):
         with self.lock:
-            return {
-                "state": self.state,
-                "reason": self.reason,
-                "alert": self.alert,
-                "alert_score": round(self.alert_score, 3),
-                "scan_steps": self.scan_steps,
-                "command_left": self.command[0],
-                "command_right": self.command[1],
+            status = {
+                "mode": self.mode,
             }
+            if self.mode == "MANUAL":
+                man_stat = self.manual_ctrl.get_status()
+                status.update({
+                    "state": "MANUAL_CONTROL",
+                    "reason": man_stat["reason"],
+                    "alert": "",
+                    "alert_score": 0.0,
+                    "scan_steps": 0,
+                    "command_left": man_stat["command_left"],
+                    "command_right": man_stat["command_right"],
+                })
+            else:
+                auto_stat = self.auto_ctrl.get_status()
+                status.update(auto_stat)
+            return status
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--ncnn", default="best_ncnn_model")
-    parser.add_argument("--yamnet", default="yamnet.tflite")
-    parser.add_argument("--whisper", default="ggml-tiny.en.bin")
+    parser.add_argument("--ncnn", default="model/best_ncnn_model")
+    parser.add_argument("--yamnet", default="model/yamnet.tflite")
+    parser.add_argument("--whisper", default="model/ggml-tiny.en.bin")
     parser.add_argument("--serial", default="/dev/ttyACM0")
     parser.add_argument("--speech-thresh", type=float, default=0.35)
     parser.add_argument("--event-thresh", type=float, default=0.45)
@@ -156,7 +123,7 @@ def parse_args():
 def main():
     args = parse_args()
     stopped = threading.Event()
-    controller = RobotController()
+    manager = RobotDualModeManager()
     detector = None
     audio = None
     motor = None
@@ -171,19 +138,19 @@ def main():
         print(f"[Top] Audio event: {event} ({score:.2f})")
         if event in ("alarm", "alarm_clock"):
             if system_ready():
-                accepted = controller.trigger(event, score)
+                accepted = manager.trigger_alarm(event, score)
                 print(f"[Top] Mission accepted: {accepted}")
             else:
                 print("[Top] Mission ignored: vision or Arduino is not ready")
 
     def emergency_stop():
-        controller.emergency_stop()
+        manager.emergency_stop()
         if motor is not None:
             motor.emergency_stop()
 
     def status():
         return {
-            "robot": controller.get_status(),
+            "robot": manager.get_status(),
             "vision": {} if detector is None else detector.get_status(),
             "audio": {} if audio is None else audio.get_status(),
             "motor": {} if motor is None else motor.get_status(),
@@ -194,7 +161,7 @@ def main():
 
     try:
         if not args.audio_only:
-            from detector import YoloDetectorEngine
+            from perception.detector import YoloDetectorEngine
 
             detector = YoloDetectorEngine(
                 model_path=local_path(args.ncnn),
@@ -202,11 +169,11 @@ def main():
             detector.start()
 
         if not args.vision_only and not args.audio_only:
-            motor = MotorGateway(port=args.serial, dry_run=args.dry_run)
+            motor = MotorGateway(dry_run=args.dry_run)
             motor.start()
 
         if not args.vision_only and not args.no_audio:
-            from audio_pipeline import YamnetWhisperAudioPipeline
+            from perception.audio_pipeline import YamnetWhisperAudioPipeline
 
             audio = YamnetWhisperAudioPipeline(
                 yamnet_model_path=local_path(args.yamnet),
@@ -221,6 +188,8 @@ def main():
             detector_engine=detector,
             robot_status_provider=status,
             emergency_stop=emergency_stop,
+            set_mode_callback=manager.set_mode,
+            manual_cmd_callback=manager.handle_manual_command,
             host="0.0.0.0",
             port=args.port,
         )
@@ -232,7 +201,7 @@ def main():
             while not stopped.is_set() and not system_ready() and time.monotonic() < deadline:
                 time.sleep(0.1)
             if system_ready():
-                controller.trigger("alarm", 1.0)
+                manager.trigger_alarm("alarm", 1.0)
             else:
                 print("[Top] Simulated alarm not started: system not ready")
 
@@ -241,14 +210,14 @@ def main():
             if motor is None:
                 continue
             target = None if detector is None else detector.get_target(max_age=0.5)
-            command = controller.tick(target, motor.get_status())
+            command = manager.tick(target, motor.get_status())
             motor.set_target(*command)
-            current = controller.get_status()
-            marker = (current["state"], current["reason"], command)
+            current = manager.get_status()
+            marker = (current["mode"], current["state"], current["reason"], command)
             if marker != previous:
                 print(
-                    f"[Top] {current['state']}: {current['reason']} "
-                    f"V {command[0]} {command[1]}"
+                    f"[Top] [{current['mode']}] {current['state']}: {current['reason']} "
+                    f"PWM: {command[0]} / {command[1]}"
                 )
                 previous = marker
     finally:
