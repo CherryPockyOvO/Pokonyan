@@ -82,7 +82,7 @@ class ShoeTrackerController:
             valid_dist = distance_cm is not None and distance_cm > 0.0
 
             # -------------------------------------------------------------
-            # 2. 抵達鞋子特判 (撞到鞋子 / 畫面滿屏鞋子 / 超聲波 <= 15cm)
+            # 2. 抵達鞋子特判：不煞車，持續前進 (200, 200) 反覆去撞鞋子！
             # -------------------------------------------------------------
             is_at_shoe = (
                 (valid_dist and distance_cm <= self.stop_dist_cm)
@@ -90,8 +90,8 @@ class ShoeTrackerController:
             )
             if is_at_shoe:
                 dist_str = f"{distance_cm:.1f}cm" if valid_dist else "N/A"
-                self.reason = f"🎯 Arrived at shoe! (Distance: {dist_str}, Height: {height_ratio*100:.1f}%)"
-                return (0, 0), self.reason
+                self.reason = f"💥 Bumping into shoe repeatedly! (Distance: {dist_str}, Height: {height_ratio*100:.1f}%)"
+                return (200, 200), self.reason
 
             # -------------------------------------------------------------
             # 3. 取消避障！直接專注於鞋子中心對準與追蹤 (Pure Shoe Pursuit)
