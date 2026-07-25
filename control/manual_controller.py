@@ -31,8 +31,8 @@ class ManualController:
                 self.command = (-200, -80)        # 右後弧線 (左輪-200, 右輪-80)
                 self.reason = "manual backward-right (SD: -200, -80)"
             elif cmd in ("SA", "AS"):
-                self.command = (-110, -200)       # 左後弧線 (左輪-110, 右輪-200)
-                self.reason = "manual backward-left (SA: -110, -200)"
+                self.command = (-90, -200)        # 左後弧線 (降至-90：加大左後倒車弧度，防止直行)
+                self.reason = "manual backward-left (SA: -90, -200)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
                 self.command = (240, 240)         # 直向前進 (240, 240)
