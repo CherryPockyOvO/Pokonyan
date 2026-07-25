@@ -21,10 +21,12 @@ class ShoeTrackerController:
         target_center_x=320.0,
         deadband_px=30.0,
         smoothing_alpha=0.3,
+        obstacle_dist_cm=65.0,
         stop_dist_cm=15.0,
         full_shoe_height_ratio=0.60,
         pulse_duration_sec=0.15,
         pulse_pause_sec=0.10,
+        **kwargs,
     ):
         self.lock = threading.Lock()
         self.target_center_x = target_center_x

@@ -36,14 +36,13 @@ class AutoController:
             clear_dist_cm=70.0,
         )
 
-        # 2. 獨立 YOLO 檢測框中心抗抖動追蹤與避障控制器
+        # 2. 獨立 YOLO 檢測框中心抗抖動追蹤控制器 (視野出現鞋子框時取消避障，專注追蹤)
         self.shoe_tracker = ShoeTrackerController(
             target_center_x=320.0,
             deadband_px=30.0,
             smoothing_alpha=0.3,
-            obstacle_dist_cm=65.0,
             stop_dist_cm=15.0,
-            full_shoe_height_ratio=0.65,
+            full_shoe_height_ratio=0.60,
         )
 
     def _transition(self, state, now, reason):
