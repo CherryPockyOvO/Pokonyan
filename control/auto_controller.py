@@ -10,7 +10,7 @@ from control.pet_wander import PetWanderController
 class AutoController:
     """State machine for automatic shoe-seeking mission and pet-like free wandering."""
 
-    def __init__(self, forward_pwm=200, slow_pwm=200, pivot_pwm=120, inner_pwm=100, slow_distance_cm=65.0):
+    def __init__(self, forward_pwm=240, slow_pwm=240, pivot_pwm=165, inner_pwm=80, slow_distance_cm=65.0):
         self.lock = threading.Lock()
         self.state = "IDLE"
         self.state_since = time.monotonic()

@@ -6,7 +6,7 @@ import time
 
 
 class ManualController:
-    """Manual control handling WASD and combination key commands with fine-tuned asymmetric motor compensation."""
+    """Manual control handling WASD and combination key commands with fine-tuned asymmetric motor compensation (240 max speed)."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -20,32 +20,32 @@ class ManualController:
             now = time.monotonic()
             self.last_cmd_at = now
 
-            # 組合鍵判斷 (微調：WA 65, 200; SA -85, -150)
+            # 組合鍵判斷 (240 上限動態等級微調)
             if cmd in ("WD", "DW"):
-                self.command = (200, 70)          # 右前弧線 (左輪200, 右輪70)
-                self.reason = "manual forward-right (WD: 200, 70)"
+                self.command = (240, 80)          # 右前弧線 (左輪240, 右輪80)
+                self.reason = "manual forward-right (WD: 240, 80)"
             elif cmd in ("WA", "AW"):
-                self.command = (65, 200)          # 左前弧線 (降至65：加大左轉弧度，防止走直線)
-                self.reason = "manual forward-left (WA: 65, 200)"
+                self.command = (75, 240)          # 左前弧線 (左輪75, 右輪240)
+                self.reason = "manual forward-left (WA: 75, 240)"
             elif cmd in ("SD", "DS"):
-                self.command = (-150, -60)        # 右後弧線 (左輪-150, 右輪-60)
-                self.reason = "manual backward-right (SD: -150, -60)"
+                self.command = (-180, -70)        # 右後弧線 (左輪-180, 右輪-70)
+                self.reason = "manual backward-right (SD: -180, -70)"
             elif cmd in ("SA", "AS"):
-                self.command = (-85, -150)        # 左後弧線 (升至-85：提供足夠倒車動力，防止原地卡死)
-                self.reason = "manual backward-left (SA: -85, -150)"
+                self.command = (-100, -180)       # 左後弧線 (左輪-100, 右輪-180)
+                self.reason = "manual backward-left (SA: -100, -180)"
             # 單鍵判斷
             elif cmd in ("W", "FORWARD"):
-                self.command = (200, 200)         # 直向前進 200, 200
-                self.reason = "manual forward (W: 200, 200)"
+                self.command = (240, 240)         # 直向前進 (240, 240)
+                self.reason = "manual forward (W: 240, 240)"
             elif cmd in ("S", "BACKWARD"):
-                self.command = (-150, -150)       # 直線後退 -150, -150
-                self.reason = "manual backward (S: -150, -150)"
+                self.command = (-180, -180)       # 直線後退 (-180, -180)
+                self.reason = "manual backward (S: -180, -180)"
             elif cmd in ("A", "LEFT"):
-                self.command = (-140, 140)        # 左拐 -140, 140
-                self.reason = "manual turn left (A: -140, 140)"
+                self.command = (-160, 165)        # 左拐 (-160, 165)
+                self.reason = "manual turn left (A: -160, 165)"
             elif cmd in ("D", "RIGHT"):
-                self.command = (150, -150)        # 右拐 150, -150
-                self.reason = "manual turn right (D: 150, -150)"
+                self.command = (175, -175)        # 右拐 (175, -175)
+                self.reason = "manual turn right (D: 175, -175)"
             elif cmd in ("B", "STOP", "BRAKE"):
                 self.command = (0, 0)
                 self.reason = "manual brake (B: 0, 0)"
