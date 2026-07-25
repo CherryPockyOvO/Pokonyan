@@ -10,7 +10,7 @@ import time
 from control.motor import MotorGateway
 from control.auto_controller import AutoController
 from control.manual_controller import ManualController
-from ui.web_server import WebStreamServer
+from ui.web_server import WebStreamServer, StreamingHandler
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -159,33 +159,10 @@ def main():
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
 
+    # 1. 優先開啟 Web 8080 端口，確保即使硬體未連接也能訪問 Web 界面
     try:
-        if not args.audio_only:
-            from perception.detector import YoloDetectorEngine
-
-            detector = YoloDetectorEngine(
-                model_path=local_path(args.ncnn),
-            )
-            detector.start()
-
-        if not args.vision_only and not args.audio_only:
-            motor = MotorGateway(port=args.serial, dry_run=args.dry_run)
-            motor.start()
-
-        if not args.vision_only and not args.no_audio:
-            from perception.audio_pipeline import YamnetWhisperAudioPipeline
-
-            audio = YamnetWhisperAudioPipeline(
-                yamnet_model_path=local_path(args.yamnet),
-                whisper_model_path=local_path(args.whisper),
-                speech_threshold=args.speech_thresh,
-                event_threshold=args.event_thresh,
-                on_event=audio_event,
-            )
-            audio.start()
-
         web = WebStreamServer(
-            detector_engine=detector,
+            detector_engine=None,
             robot_status_provider=status,
             emergency_stop=emergency_stop,
             set_mode_callback=manager.set_mode,
@@ -195,7 +172,49 @@ def main():
             port=args.port,
         )
         web.start()
-        print(f"[Top] Web monitor: http://<RaspberryPi-IP>:{args.port}/")
+        print(f"[Top] Web monitor listening on http://0.0.0.0:{args.port}/")
+    except Exception as e:
+        print(f"[Top] WebStreamServer port bind warning: {e}")
+
+    try:
+        if not args.audio_only:
+            try:
+                from perception.detector import YoloDetectorEngine
+
+                detector = YoloDetectorEngine(
+                    model_path=local_path(args.ncnn),
+                )
+                detector.start()
+                if web is not None:
+                    StreamingHandler.detector = detector
+            except Exception as e:
+                print(f"[Top] Vision detector init warning: {e}")
+
+        if not args.vision_only and not args.audio_only:
+            try:
+                motor = MotorGateway(port=args.serial, dry_run=args.dry_run)
+                motor.start()
+            except Exception as e:
+                print(f"[Top] Motor gateway init warning: {e}")
+                motor = MotorGateway(dry_run=True)
+                motor.start()
+
+        if not args.vision_only and not args.no_audio:
+            try:
+                from perception.audio_pipeline import YamnetWhisperAudioPipeline
+
+                audio = YamnetWhisperAudioPipeline(
+                    yamnet_model_path=local_path(args.yamnet),
+                    whisper_model_path=local_path(args.whisper),
+                    speech_threshold=args.speech_thresh,
+                    event_threshold=args.event_thresh,
+                    on_event=audio_event,
+                )
+                audio.start()
+                if web is not None:
+                    StreamingHandler.audio = audio
+            except Exception as e:
+                print(f"[Top] Audio pipeline init warning: {e}")
 
         if args.simulate_alarm:
             deadline = time.monotonic() + 15.0
