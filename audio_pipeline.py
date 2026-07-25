@@ -3,21 +3,15 @@
 
 Architecture:
   1. Microphone audio is captured and resampled to 16 kHz.
-  2. Tonal peaks (bell / alarm frequencies) are detected periodically.
-  3. Each chunk is split via three-band separation into:
-       - Voice  (80-4000 Hz bandpass, notch-filtered)  → YAMNet-Speech
-       - Bell   (narrow bandpass around tone freqs)     → YAMNet-Bell
-       - Other  (residual, discarded)
-  4. Two YAMNet interpreters run on their respective bands in parallel.
-  5. When YAMNet-Speech detects speech, audio accumulates.
+  2. Each chunk is processed in two parallel paths:
+       - Voice: raw audio (no filter) → YAMNet-Speech
+       - Bell:  bandpass filter (500-4000 Hz) → YAMNet-Bell
+  3. Two YAMNet interpreters run on their respective inputs in parallel.
+  4. When YAMNet-Speech detects speech, audio accumulates.
      After silence, the utterance goes through speaker separation
      (SepFormer or STFT fallback) to extract the dominant speaker,
      then Whisper transcribes the result.
-  6. When YAMNet-Bell detects alarm / doorbell, the on_event callback fires.
-
-Preprocessing (tone detection, notch filtering, three-band separation) is
-imported from the parent rpi5_deploy/audio_pipeline.py module and is NOT
-modified here.
+  5. When YAMNet-Bell detects alarm / doorbell, the on_event callback fires.
 """
 
 import os
@@ -96,99 +90,16 @@ def extract_dominant_speaker_timbre(audio_data, sample_rate=16000):
     return cleaned_audio.astype(np.float32)
 
 
-def detect_tonal_peaks(audio_data, sample_rate=16000, min_freq=400.0,
-                       max_freq=3000.0, min_q_factor=20.0, max_tones=4):
-    """Welch PSD + Q 因子检测窄带纯音峰值（门铃 / 警报频率）。"""
-    if len(audio_data) < sample_rate:
-        return []
-
-    segment_len = sample_rate
-    nperseg = min(segment_len, len(audio_data))
-    noverlap = nperseg // 2
-    freqs, psd = signal.welch(audio_data, fs=sample_rate,
-                              nperseg=nperseg, noverlap=noverlap)
-
-    freq_mask = (freqs >= min_freq) & (freqs <= max_freq)
-    if not np.any(freq_mask):
-        return []
-
-    local_psd = psd[freq_mask]
-    local_freqs = freqs[freq_mask]
-
-    min_distance_bins = max(1, int(80.0 / (freqs[1] - freqs[0])))
-    peaks, _ = signal.find_peaks(
-        local_psd,
-        height=np.max(local_psd) * 0.05,
-        distance=min_distance_bins,
-        prominence=np.max(local_psd) * 0.02,
-    )
-    if len(peaks) == 0:
-        return []
-
-    tone_candidates = []
-    freq_resolution = freqs[1] - freqs[0]
-
-    for peak_idx in peaks:
-        peak_freq = local_freqs[peak_idx]
-        peak_power = local_psd[peak_idx]
-        half_power = peak_power / 2.0
-        bandwidth_mask = local_psd >= half_power
-        left = peak_idx
-        while left > 0 and bandwidth_mask[left - 1]:
-            left -= 1
-        right = peak_idx
-        while right < len(bandwidth_mask) - 1 and bandwidth_mask[right + 1]:
-            right += 1
-        bandwidth_hz = max((right - left + 1) * freq_resolution, freq_resolution)
-        q_factor = peak_freq / bandwidth_hz
-        if q_factor >= min_q_factor:
-            tone_candidates.append((peak_freq, peak_power, q_factor))
-
-    tone_candidates.sort(key=lambda x: x[1], reverse=True)
-    return sorted(freq for freq, _, _ in tone_candidates[:max_tones])
-
-
-def apply_notch_filters(audio_data, tone_freqs, sample_rate=16000, bandwidth=20.0):
-    """级联 IIR 陷波滤波器，去除已知纯音频率。"""
-    if not tone_freqs or len(audio_data) == 0:
-        return audio_data
-    filtered = audio_data.copy().astype(np.float32)
-    for freq in tone_freqs:
-        if freq <= 0 or freq >= sample_rate / 2:
-            continue
-        Q = freq / bandwidth
-        b, a = signal.iirnotch(freq, Q, fs=sample_rate)
-        filtered = signal.lfilter(b, a, filtered).astype(np.float32)
-    return filtered
-
-
-def three_band_separate(audio_data, tone_freqs, sample_rate=16000,
-                        voice_low=80.0, voice_high=4000.0, tone_bandwidth=30.0):
-    """三路滤波：人声（带通+陷波）/ 纯音（窄带通）/ 残差。"""
+def bandpass_filter(audio_data, sample_rate=16000, lowcut=500.0, highcut=4000.0, order=5):
+    """带通滤波器：保留 [lowcut, highcut] 之间的频率，用于提取门铃声特征频段。"""
     if len(audio_data) == 0:
-        empty = np.zeros_like(audio_data)
-        return empty, empty, empty
-
-    audio = audio_data.astype(np.float32)
+        return audio_data
     nyquist = 0.5 * sample_rate
-
-    low = voice_low / nyquist
-    high = min(voice_high / nyquist, 0.99)
-    sos_bp = signal.butter(4, [low, high], btype='bandpass', output='sos')
-    voice_bandpassed = signal.sosfilt(sos_bp, audio).astype(np.float32)
-    voice = apply_notch_filters(voice_bandpassed, tone_freqs, sample_rate, bandwidth=20.0)
-
-    tone = np.zeros_like(audio)
-    for freq in tone_freqs:
-        f_low = max((freq - tone_bandwidth / 2) / nyquist, 0.001)
-        f_high = min((freq + tone_bandwidth / 2) / nyquist, 0.999)
-        if f_high <= f_low:
-            continue
-        sos_narrow = signal.butter(2, [f_low, f_high], btype='bandpass', output='sos')
-        tone += signal.sosfilt(sos_narrow, audio).astype(np.float32)
-
-    other = audio - voice - tone
-    return voice, tone, other
+    low = max(0.001, min(lowcut / nyquist, 0.99))
+    high = max(low + 0.001, min(highcut / nyquist, 0.99))
+    sos = signal.butter(order, [low, high], btype='bandpass', output='sos')
+    filtered = signal.sosfiltfilt(sos, audio_data)
+    return filtered.astype(np.float32)
 
 
 # ===================================================================
@@ -202,6 +113,8 @@ BELL_EVENTS = {
     "alarm":       (382, 390, 391, 393, 394),
     "alarm_clock": (389,),
     "doorbell":    (349, 350),
+    "bell":        (173, 195, 196, 197, 198, 200, 201),
+    "ring":        (202, 384, 385),
 }
 
 
@@ -373,11 +286,6 @@ class YamnetWhisperAudioPipeline:
         self.last_bell_at = {n: 0.0 for n in BELL_EVENTS}
         self.speech_hits = {n: 0 for n in SPEECH_EVENTS}
         self.last_speech_at = {n: 0.0 for n in SPEECH_EVENTS}
-
-        # -- adaptive tone-filter state --
-        self.active_tone_freqs = []
-        self.tone_cooldown = 0.0
-        self.tone_detect_interval = 0.5    # re-detect every 0.5 s
 
         # -- speaker-separation backend --
         self._sepformer_available = False
@@ -571,11 +479,8 @@ class YamnetWhisperAudioPipeline:
     # Main processing loop
     # ------------------------------------------------------------------
     def _process_loop(self):
-        # Two ring buffers — one per YAMNet
         speech_ring = np.zeros(self.window_size, dtype=np.float32)
         bell_ring = np.zeros(self.window_size, dtype=np.float32)
-        # Full-spectrum ring for tone detection
-        full_ring = np.zeros(self.window_size, dtype=np.float32)
 
         speech_chunks = []
         gate_open = False
@@ -588,48 +493,20 @@ class YamnetWhisperAudioPipeline:
             except queue.Empty:
                 continue
 
-            # ── update full-spectrum ring buffer ──
-            if len(chunk) >= len(full_ring):
-                full_ring[:] = chunk[-len(full_ring):]
+            # ── raw audio → speech ring (no filter for voice) ──
+            if len(chunk) >= len(speech_ring):
+                speech_ring[:] = chunk[-len(speech_ring):]
             else:
-                full_ring = np.roll(full_ring, -len(chunk))
-                full_ring[-len(chunk):] = chunk
+                speech_ring = np.roll(speech_ring, -len(chunk))
+                speech_ring[-len(chunk):] = chunk
 
-            # ── periodic tone-frequency detection ──
-            now = time.monotonic()
-            if now - self.tone_cooldown >= self.tone_detect_interval:
-                self.tone_cooldown = now
-                detected = detect_tonal_peaks(
-                    full_ring, self.target_sample_rate,
-                )
-                if detected:
-                    if detected != self.active_tone_freqs:
-                        self.active_tone_freqs = detected
-                        print(
-                            f"\n[Audio] Tone filter: "
-                            f"{[f'{f:.0f}Hz' for f in detected]}"
-                        )
-                elif self.active_tone_freqs:
-                    self.active_tone_freqs = []
-                    print("\n[Audio] Tone filter: released (no tones)")
-
-            # ── three-band separation on the current chunk ──
-            voice_chunk, tone_chunk, _other = three_band_separate(
-                chunk, self.active_tone_freqs, self.target_sample_rate,
-            )
-
-            # ── push into per-YAMNet ring buffers ──
-            if len(voice_chunk) >= len(speech_ring):
-                speech_ring[:] = voice_chunk[-len(speech_ring):]
+            # ── bandpass filter (500-4000Hz) → bell ring ──
+            bell_chunk = bandpass_filter(chunk, self.target_sample_rate)
+            if len(bell_chunk) >= len(bell_ring):
+                bell_ring[:] = bell_chunk[-len(bell_ring):]
             else:
-                speech_ring = np.roll(speech_ring, -len(voice_chunk))
-                speech_ring[-len(voice_chunk):] = voice_chunk
-
-            if len(tone_chunk) >= len(bell_ring):
-                bell_ring[:] = tone_chunk[-len(bell_ring):]
-            else:
-                bell_ring = np.roll(bell_ring, -len(tone_chunk))
-                bell_ring[-len(tone_chunk):] = tone_chunk
+                bell_ring = np.roll(bell_ring, -len(bell_chunk))
+                bell_ring[-len(bell_chunk):] = bell_chunk
 
             # ── YAMNet-Speech inference ──
             try:
@@ -672,14 +549,14 @@ class YamnetWhisperAudioPipeline:
                 if not gate_open:
                     gate_open = True
                     speech_started = now
-                    speech_chunks = [voice_chunk.copy()]
+                    speech_chunks = [chunk.copy()]
                     print(f"\n[Audio-Speech] Gate OPEN  (score {sp:.2f})")
                 else:
-                    speech_chunks.append(voice_chunk)
+                    speech_chunks.append(chunk)
                 silence_since = None
 
             elif gate_open:
-                speech_chunks.append(voice_chunk)
+                speech_chunks.append(chunk)
                 if silence_since is None:
                     silence_since = now
 

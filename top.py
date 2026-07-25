@@ -136,7 +136,6 @@ class RobotController:
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--cam", type=int, default=0)
     parser.add_argument("--ncnn", default="best_ncnn_model")
     parser.add_argument("--yamnet", default="yamnet.tflite")
     parser.add_argument("--whisper", default="ggml-tiny.en.bin")
@@ -199,7 +198,6 @@ def main():
 
             detector = YoloDetectorEngine(
                 model_path=local_path(args.ncnn),
-                camera_id=args.cam,
             )
             detector.start()
 

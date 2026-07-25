@@ -21,7 +21,6 @@ class YoloDetectorEngine:
     def __init__(
         self,
         model_path="best_ncnn_model",
-        camera_id=0,
         target_video_fps=20,
         infer_fps=5,
         confidence=0.35,
@@ -29,7 +28,6 @@ class YoloDetectorEngine:
         detection_hold_seconds=0.6,
     ):
         self.model_path = Path(model_path).expanduser().resolve()
-        self.camera_id = camera_id
         self.target_video_fps = target_video_fps
         self.infer_fps = infer_fps
         self.confidence = confidence
@@ -55,7 +53,6 @@ class YoloDetectorEngine:
         self.running = False
         self.thread = None
         self.picam2 = None
-        self.cap = None
         self.camera_type = None
 
     @staticmethod
@@ -93,20 +90,9 @@ class YoloDetectorEngine:
                 camera.configure(configuration)
                 camera.start()
                 self.picam2 = camera
-                print("[Vision] Picamera2 camera opened")
                 return "picamera2"
             except Exception as error:
                 print(f"[Vision] Picamera2 unavailable: {error}")
-
-        for device in dict.fromkeys((self.camera_id, 0, 1, 2)):
-            camera = cv2.VideoCapture(device, cv2.CAP_V4L2)
-            if camera.isOpened():
-                ok, frame = camera.read()
-                if ok and frame is not None:
-                    self.cap = camera
-                    print(f"[Vision] V4L2 camera {device} opened")
-                    return "opencv"
-            camera.release()
         return None
 
     def _read_frame(self):
@@ -116,8 +102,6 @@ class YoloDetectorEngine:
                 return frame is not None and frame.size > 0, frame
             except Exception:
                 return False, None
-        if self.camera_type == "opencv" and self.cap is not None:
-            return self.cap.read()
         return False, None
 
     def _smooth(self, new_boxes):
@@ -296,8 +280,6 @@ class YoloDetectorEngine:
             if self.picam2 is not None:
                 self.picam2.stop()
                 self.picam2.close()
-            if self.cap is not None:
-                self.cap.release()
 
     def start(self):
         if self.running:
