@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Automatically sync GitHub code to Raspberry Pi 5 via SSH, launch lightweight top.py --no-audio on Pi,
-# and start local PC Audio Node.
+# Direct Launcher: Sync code to Raspberry Pi 5 via SSH and run top.py with Web UI on port 8080 (--no-audio)
 
 PI_USER="xzm"
 PI_HOST="100.80.242.72"
@@ -12,7 +11,7 @@ if [ -n "$1" ]; then
 fi
 
 echo "=========================================================="
-echo "🚀 1. Syncing latest GitHub repo on Raspberry Pi ($PI_USER@$PI_HOST)..."
+echo "🚀 Syncing GitHub repo and launching Web Server on Pi ($PI_USER@$PI_HOST)..."
 echo "=========================================================="
 
 SSH_CMD="ssh"
@@ -20,15 +19,5 @@ if command -v sshpass >/dev/null 2>&1; then
     SSH_CMD="sshpass -p $PI_PASS ssh"
 fi
 
-$SSH_CMD "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio" &
-PI_PID=$!
-
-sleep 3
-
-echo "=========================================================="
-echo "🎙️ 2. Starting Local PC Audio Node (YAMNet + Whisper)..."
-echo "=========================================================="
-
-python3 pc_audio_client.py --pi-host "$PI_HOST"
-
-kill $PI_PID 2>/dev/null
+# 執行 SSH 命令，顯示完整樹莓派輸出 logs
+$SSH_CMD "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio --dry-run"
