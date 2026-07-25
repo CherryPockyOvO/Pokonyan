@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Autonomous Shoe Tracking Controller with Pure Target Pursuit & Obstacle Bypass."""
+"""Autonomous Shoe Tracking Controller with Dual-Stage Adaptive Steering & Pure Target Pursuit."""
 
 import threading
 import time
@@ -9,14 +9,15 @@ class ShoeTrackerController:
     """Shoe Tracking Controller focusing 100% on target pursuit when a YOLO shoe box is detected.
     
     Features:
-    1. Complete Obstacle Avoidance Bypass: Whenever a YOLO shoe box is present in the field of view,
-       all obstacle avoidance is completely cancelled so the robot drives directly towards the shoe.
-    2. Low-Pass Exponential Anti-Jitter Filter on target center offset (dx).
-    3. Step/Pulse Steering (0.15s turn pulse + 0.10s camera pause) for smooth, step-by-step target centering.
-    4. Arrival Check: Drives straight into the shoe until distance <= 15cm or shoe takes over 60% of screen height, then stops.
+    1. Dual-Stage Adaptive Steering:
+       - Far / Small Shoe (height < 25%): Uses smooth combination curved turns (WA: 90, 240 / WD: 240, 90) to track without shaking!
+       - Near / Large Shoe (height >= 25%): Uses step-pulse turns for precise close-range alignment before bumping into shoe.
+    2. Continuous Bumping: Keeps driving forward (200, 200) into the shoe without braking upon arrival.
+    3. Low-Pass Exponential Anti-Jitter Filter on target center offset (dx).
     """
 
     def __init__(
+
         self,
         target_center_x=320.0,
         deadband_px=30.0,
@@ -59,7 +60,7 @@ class ShoeTrackerController:
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：當視野出現鞋子框時，取消避障，全力對準並直奔鞋子。"""
+        """核心追蹤週期函數：當視野出現鞋子框時，根據目標大小自適應選擇平滑弧線或步進轉向。"""
         now = time.monotonic()
         with self.lock:
             if target is None:
@@ -94,56 +95,71 @@ class ShoeTrackerController:
                 return (200, 200), self.reason
 
             # -------------------------------------------------------------
-            # 3. 取消避障！直接專注於鞋子中心對準與追蹤 (Pure Shoe Pursuit)
+            # 3. 雙階段自適應追蹤演算法 (Dual-Stage Adaptive Steering)
             # -------------------------------------------------------------
+            is_far_target = height_ratio < 0.25  # 鞋子較小 / 較遠 (畫面高度佔比 < 25%)
 
-            # -------------------------------------------------------------
-            # 4. 步進式小幅度脈衝轉向控制 (Step / Pulse Steering Control)
-            # -------------------------------------------------------------
+            if is_far_target:
+                # ---------------------------------------------------------
+                # 階段 A: 遠距離 / 小目標 (Height < 25%)
+                # 完全使用平滑弧線組合鍵 (WA: 90, 240 / WD: 240, 90) 進行追蹤！
+                # 避免遠距離原地旋轉導致畫面跳動與車身左右晃動！
+                # ---------------------------------------------------------
+                self.pulse_state = "IDLE"  # 遠距離使用連續平滑弧線
+                if abs(dx) <= self.deadband_px:
+                    cmd = (200, 200)
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
+                elif dx < 0:
+                    cmd = (90, 240)  # 左前弧線 WA
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 90, 240, dx={dx:.1f})"
+                else:
+                    cmd = (240, 90)  # 右前弧線 WD
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 240, 90, dx={dx:.1f})"
+                return cmd, self.reason
+
+            # ---------------------------------------------------------
+            # 階段 B: 近距離 / 大目標 (Height >= 25%)
+            # 使用步進式小幅度脈衝原地旋轉/弧線 (Step Pulse) 進行精確對準
+            # ---------------------------------------------------------
             # A) 處理步進脈衝中的動作 (PULSING)
             if self.pulse_state == "PULSING":
                 if now < self.pulse_until:
                     return self.pulse_cmd, self.reason
                 else:
-                    # 脈衝結束，進入簡短停頓讓相機與視覺讀取新幀 (PAUSING)
                     self.pulse_state = "PAUSING"
                     self.pause_until = now + self.pulse_pause_sec
-                    return (0, 0), "🎯 Tracking: Steering pulse pause (reading frame)"
+                    return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
 
             # B) 處理步進脈衝間隔停頓 (PAUSING)
             if self.pulse_state == "PAUSING":
                 if now < self.pause_until:
-                    return (0, 0), "🎯 Tracking: Steering pulse pause (reading frame)"
+                    return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
                 else:
                     self.pulse_state = "IDLE"
 
             # C) 精確對準中心 (±30px 死區) -> 全速直向前進 (200, 200)
             if abs(dx) <= self.deadband_px:
                 cmd = (200, 200)
-                self.reason = f"🎯 Tracking: Centered (dx={dx:.1f}) -> Driving Forward to Shoe"
+                self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 return cmd, self.reason
 
             # D) 觸發新的小幅度步進轉向脈衝 (0.15s 強力轉向 + 0.10s 觀察)
             if dx < -90.0:
-                # 大幅偏左 -> 0.15s 原地左轉步進
                 cmd = (-160, 165)
                 act_name = "Step Spin Left (-160, 165)"
             elif dx < -self.deadband_px:
-                # 輕微偏左 -> 0.18s 弧線左前步進
                 cmd = (90, 240)
                 act_name = "Step Curve Left (90, 240)"
             elif dx > 90.0:
-                # 大幅偏右 -> 0.15s 原地右轉步進
                 cmd = (175, -175)
                 act_name = "Step Spin Right (175, -175)"
             else:
-                # 輕微偏右 -> 0.18s 弧線右前步進
                 cmd = (240, 90)
                 act_name = "Step Curve Right (240, 90)"
 
             self.pulse_state = "PULSING"
             self.pulse_cmd = cmd
             self.pulse_until = now + (0.18 if abs(dx) <= 90 else self.pulse_duration_sec)
-            self.reason = f"🎯 Tracking Shoe: {act_name} (dx={dx:.1f})"
+            self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): {act_name} (dx={dx:.1f})"
 
             return self.pulse_cmd, self.reason
