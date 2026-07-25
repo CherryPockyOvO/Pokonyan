@@ -14,4 +14,4 @@ echo "🚀 Connecting to Raspberry Pi ($PI_USER@$PI_HOST)..."
 echo "=========================================================="
 
 # 直接執行 git reset 與 python3 top.py，無任何 pkill 邏輯
-ssh -t "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio --dry-run"
+ssh -t "$PI_USER@$PI_HOST" "cd $PI_DIR && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio"

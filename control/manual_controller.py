@@ -8,7 +8,7 @@ import time
 class ManualController:
     """Manual control handling WASD and combination key commands."""
 
-    def __init__(self, forward_pwm=250, pivot_pwm=200, inner_pwm=150):
+    def __init__(self, forward_pwm=250, pivot_pwm=200, inner_pwm=100):
         self.lock = threading.Lock()
         self.command = (0, 0)
         self.reason = "manual standby"
