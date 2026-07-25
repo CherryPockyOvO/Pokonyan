@@ -36,7 +36,7 @@ class RobotDualModeManager:
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.mode = "AUTO"  # "AUTO" or "MANUAL"
+        self.mode = "MANUAL"  # Default to MANUAL mode on startup
         self.auto_ctrl = AutoController(forward_pwm=250, slow_pwm=150, pivot_pwm=200, inner_pwm=100)
         self.manual_ctrl = ManualController(forward_pwm=250, pivot_pwm=200, inner_pwm=100)
 
