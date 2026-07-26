@@ -249,14 +249,15 @@ class YamnetWhisperAudioPipeline:
     ):
         if Interpreter is None:
             raise RuntimeError("LiteRT/TFLite interpreter is not installed")
-        if WhisperCPP is None:
-            raise RuntimeError("pywhispercpp is not installed")
+        if whisper_model_path is not None and WhisperCPP is None:
+            print("[AudioPipeline] Warning: pywhispercpp is not installed. Whisper speech recognition will be disabled.")
+            whisper_model_path = None
 
         self.yamnet_model_path = Path(yamnet_model_path).expanduser().resolve()
-        self.whisper_model_path = Path(whisper_model_path).expanduser().resolve()
+        self.whisper_model_path = Path(whisper_model_path).expanduser().resolve() if whisper_model_path else None
         if not self.yamnet_model_path.is_file():
             raise FileNotFoundError(f"YAMNet model not found: {self.yamnet_model_path}")
-        if not self.whisper_model_path.is_file():
+        if self.whisper_model_path and not self.whisper_model_path.is_file():
             raise FileNotFoundError(f"Whisper model not found: {self.whisper_model_path}")
 
         self.target_sample_rate = target_sample_rate
@@ -332,6 +333,10 @@ class YamnetWhisperAudioPipeline:
         self.bell_interp = self._make_interpreter()
 
     def _load_whisper(self):
+        if not self.whisper_model_path or WhisperCPP is None:
+            print("[Audio] Whisper.cpp speech transcription disabled for this pipeline.")
+            self.whisper_model = None
+            return
         print(f"[Audio] Loading Whisper.cpp: {self.whisper_model_path}")
         self.whisper_model = WhisperCPP(str(self.whisper_model_path), n_threads=4)
 

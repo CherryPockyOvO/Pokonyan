@@ -98,7 +98,7 @@ def main():
 
     audio = YamnetWhisperAudioPipeline(
         yamnet_model_path=local_path(args.yamnet),
-        whisper_model_path=local_path(args.whisper),
+        whisper_model_path=None,
         speech_threshold=args.speech_thresh,
         event_threshold=args.event_thresh,
         on_event=on_pc_audio_event,
