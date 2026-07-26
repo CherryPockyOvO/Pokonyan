@@ -39,6 +39,7 @@ class ShoeTrackerController:
 
         self.smoothed_dx = 0.0
         self.has_smoothed = False
+        self.arrived_at_shoe_standby = False
 
         # 脈衝步進轉向狀態機 (Pulse Step Steering State)
         self.pulse_state = "IDLE"  # "IDLE", "PULSING", "PAUSING"
@@ -52,6 +53,7 @@ class ShoeTrackerController:
         with self.lock:
             self.smoothed_dx = 0.0
             self.has_smoothed = False
+            self.arrived_at_shoe_standby = False
             self.pulse_state = "IDLE"
             self.pulse_cmd = (0, 0)
             self.pulse_until = 0.0
@@ -59,9 +61,12 @@ class ShoeTrackerController:
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：<10%遠距離組合鍵，10%-15%近距離降速150與1s停頓原地旋轉，>=15%停止等待撞擊。"""
+        """核心追蹤週期函數：<15%遠距離組合鍵，15%-22%近距離降速150與1s停頓原地旋轉，>=22%嚴格鎖定(0,0)等待撞擊。"""
         now = time.monotonic()
         with self.lock:
+            if self.arrived_at_shoe_standby:
+                return (0, 0), "🛑 Arrived at shoe: Strictly locked (0, 0), waiting for B1 bumper collision"
+
             if target is None:
                 self.reset()
                 return (0, 0), "No target for tracking"
@@ -84,11 +89,12 @@ class ShoeTrackerController:
             dx = self.smoothed_dx
 
             # -------------------------------------------------------------
-            # 階段 1: 鞋子面積/高度達到 22% (>= 0.22) -> 停止等待撞擊 (0, 0)
+            # 階段 1: 鞋子面積/高度達到 22% (>= 0.22) -> 嚴格鎖定靜止 (0, 0)，絕不再動
             # -------------------------------------------------------------
             if shoe_size_ratio >= 0.22:
+                self.arrived_at_shoe_standby = True
                 self.pulse_state = "IDLE"
-                self.reason = f"🛑 Arrived at shoe (Ratio {shoe_size_ratio*100:.1f}% >= 22%): Stopped (0, 0), waiting for B1 bumper collision"
+                self.reason = f"🛑 Arrived at shoe (Ratio {shoe_size_ratio*100:.1f}% >= 22%): Strictly locked (0, 0), waiting for B1 bumper collision"
                 return (0, 0), self.reason
 
             # -------------------------------------------------------------
