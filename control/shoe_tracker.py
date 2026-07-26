@@ -125,9 +125,9 @@ class ShoeTrackerController:
                     self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): {act_name} (dx={dx:.1f}) -> Pause 1.0s"
                     return self.pulse_cmd, self.reason
 
-                # 對準中心：溫和低速衝刺撞擊 (150, 150)
-                cmd = (150, 150)
-                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Centered (dx={dx:.1f}) -> Gentle Forward (150, 150)"
+                # 對準中心：原地保持靜止 (0, 0)，絕不盲目衝刺，等待撞擊與狀態確認
+                cmd = (0, 0)
+                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Centered (dx={dx:.1f}) -> Stopped (0, 0), waiting for collision"
                 return cmd, self.reason
 
             # -------------------------------------------------------------
