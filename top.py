@@ -39,6 +39,7 @@ class RobotDualModeManager:
         self.mode = "MANUAL"  # Default to MANUAL mode on startup
         self.auto_ctrl = AutoController(forward_pwm=240, slow_pwm=240, pivot_pwm=165, inner_pwm=80, slow_distance_cm=65.0)
         self.manual_ctrl = ManualController()
+        self.manual_ctrl.handle_command("B")
 
     def set_mode(self, mode):
         mode = str(mode).upper()

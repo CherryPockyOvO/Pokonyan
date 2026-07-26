@@ -429,7 +429,7 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
         if self.path == "/status":
             self.send_json({
                 "audio": latest_audio_status,
-                "robot": {"mode": "AUTO"}
+                "robot": {"mode": "MANUAL"}
             })
             return
 
