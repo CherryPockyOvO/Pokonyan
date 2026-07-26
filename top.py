@@ -160,7 +160,9 @@ def main():
         is_alarm = any(k in event_clean for k in ["alarm", "siren", "buzzer", "detector", "fire", "police", "ambulance"])
         is_doorbell = any(k in event_clean for k in ["doorbell", "ding-dong", "bell", "chime", "ring", "ringtone", "jingle", "bicycle", "carillon"])
 
+        current_cat = status_category
         if is_alarm:
+            # 🚨 ALARM 屬於高優先級：無條件覆蓋 ALARM 或 DOORBELL，並重新觸發最新任務
             status_category = "ALARM"
             alarm_event_name = event
             alarm_score = score
@@ -168,20 +170,24 @@ def main():
             print(f"[Top <- YAMNet] 🚨 [ALARM DETECTED]: '{event}' ({score:.2f})")
             if system_ready():
                 accepted = manager.trigger_alarm(event, score)
-                print(f"[Top] Mission accepted: {accepted}")
+                print(f"[Top] 警報覆蓋重置任務: {accepted}")
             else:
-                print("[Top] Mission ignored: vision or Arduino is not ready")
+                print("[Top] 任務忽略: 鏡頭或 Arduino 未就緒")
         elif is_doorbell:
-            status_category = "DOORBELL"
-            alarm_event_name = event
-            alarm_score = score
-            alarm_ts = now
-            print(f"[Top <- YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
-            if system_ready():
-                accepted = manager.trigger_alarm(event, score)
-                print(f"[Top] Mission accepted: {accepted}")
+            # 🔔 DOORBELL 僅在 NORMAL 或 DOORBELL 時覆蓋；絕不降級正在進行中的高優先級 ALARM
+            if current_cat != "ALARM":
+                status_category = "DOORBELL"
+                alarm_event_name = event
+                alarm_score = score
+                alarm_ts = now
+                print(f"[Top <- YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
+                if system_ready():
+                    accepted = manager.trigger_alarm(event, score)
+                    print(f"[Top] 門鈴覆蓋重置任務: {accepted}")
+                else:
+                    print("[Top] 任務忽略: 鏡頭或 Arduino 未就緒")
             else:
-                print("[Top] Mission ignored: vision or Arduino is not ready")
+                print(f"[Top <- YAMNet] 🔔 收到門鈴 '{event}'，但當前處於高優先級 ALARM 狀態 -> 保持 ALARM 優先")
         else:
             print(f"[Top <- YAMNet] Real-time sound: '{event}' ({score:.2f})")
 

@@ -464,14 +464,19 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                 score = float(data.get("score", 0.0))
                 now = time.monotonic()
                 if event:
-                    if event in list(ALARM_CLASSES.values()):
+                    curr_cat = latest_audio_status.get("category", "NORMAL")
+                    is_alarm_evt = event in list(ALARM_CLASSES.values())
+                    is_doorbell_evt = event in list(DOORBELL_CLASSES.values())
+
+                    if is_alarm_evt:
                         latest_audio_status["category"] = "ALARM"
                         latest_audio_status["alarm_event"] = event
                         latest_audio_status["alarm_score"] = score
-                    elif event in list(DOORBELL_CLASSES.values()):
+                    elif is_doorbell_evt and curr_cat != "ALARM":
                         latest_audio_status["category"] = "DOORBELL"
                         latest_audio_status["alarm_event"] = event
                         latest_audio_status["alarm_score"] = score
+
                     latest_audio_status["event"] = event
                     latest_audio_status["event_score"] = score
                     latest_audio_status["last_event_time"] = now
