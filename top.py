@@ -196,20 +196,15 @@ def main():
 
         text_lower = text.lower().strip()
 
-        # 1. 說 "what can I say" -> 切換為 MANUAL 手動模式 (實時即時判定)
-        if "what can i say" in text_lower or "manual" in text_lower:
+        # 1. 說 "manual mode" 或 "manual" -> 切換為 MANUAL 手動模式
+        if "manual mode" in text_lower or "manual" in text_lower:
             manager.set_mode("MANUAL")
-            print("[Top] 🎤 實時語音指令: 成功切換為 🎮 [MANUAL 手動模式]")
+            print("[Top] 🎤 語音指令: 成功切換為 🎮 [MANUAL 手動模式]")
 
-        # 2. 說 "man" -> 切換為 AUTO 自動巡航模式並啟動任務 (實時即時判定)
-        elif any(k in text_lower for k in ["man", "alarm", "start", "find", "shoe", "seek", "auto"]):
+        # 2. 說 "auto mode" 或 "auto" -> 切換為 AUTO 自動模式
+        elif "auto mode" in text_lower or "auto" in text_lower:
             manager.set_mode("AUTO")
-            print("[Top] 🎤 實時語音指令: 成功切換為 🤖 [AUTO 自動巡航模式]")
-            if system_ready():
-                accepted = manager.trigger_alarm("alarm", 1.0)
-                print(f"[Top] 巡航尋物任務啟動: {accepted}")
-            else:
-                print("[Top] 巡航模式已切換 (等待相機或 Arduino 連接就緒)")
+            print("[Top] 🎤 語音指令: 成功切換為 🤖 [AUTO 自動巡航模式]")
 
     def emergency_stop():
         manager.emergency_stop()
@@ -217,13 +212,19 @@ def main():
             motor.emergency_stop()
 
     def status():
+        nonlocal status_category, alarm_event_name, alarm_score
         now = time.time()
         # Auto-reset live event if no update for 2.5s
         live_event = latest_audio_event if (now - latest_audio_ts <= 2.5) else "-"
         live_score = latest_audio_score if (now - latest_audio_ts <= 2.5) else 0.0
 
-        # Auto-reset category back to NORMAL after 5.0s of no alarm/doorbell
-        active_category = status_category if (now - alarm_ts <= 5.0) else "NORMAL"
+        # 當 AutoController 追蹤並撞到鞋子停留 5 秒完成重置後，警報狀態同步清除恢復 NORMAL
+        if manager.auto_ctrl.alert == "":
+            status_category = "NORMAL"
+            alarm_event_name = ""
+            alarm_score = 0.0
+
+        active_category = status_category
         active_event = alarm_event_name if active_category != "NORMAL" else ""
         active_score = alarm_score if active_category != "NORMAL" else 0.0
 

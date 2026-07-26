@@ -36,6 +36,7 @@ class MotorGateway:
         self.connected = self.dry_run
         self.ready = self.dry_run
         self.distance_cm = None
+        self.bumper_pressed = False
         self.last_serial_at = time.monotonic() if self.dry_run else 0.0
         self.error = "" if serial is not None else "pyserial module unavailable (dry-run mode)"
 
@@ -110,12 +111,22 @@ class MotorGateway:
         self.ser.write(cmd_str.encode("ascii"))
 
     def _read_serial_telemetry(self):
-        """讀取 Arduino 串口回傳的超聲波數據 (如 'D 25.4' 或 '25.4')。"""
+        """讀取 Arduino 串口回傳的超聲波數據 (如 'D 25.4') 與微動開關碰撞數據 (如 'B 1' / 'B1' 或 'B 0' / 'B0')。"""
         while self.ser.in_waiting > 0:
             line = self.ser.readline().decode("utf-8", errors="ignore").strip()
             if not line:
                 continue
-            if line.startswith("D"):
+
+            # 1. 解析微動開關碰撞 (B1 = 撞到物體, B0 = 沒撞到)
+            if line.startswith("B"):
+                cleaned = line.replace("B", "").strip()
+                if cleaned == "1":
+                    self.bumper_pressed = True
+                elif cleaned == "0":
+                    self.bumper_pressed = False
+
+            # 2. 解析超聲波距離 (D <distance_cm>)
+            elif line.startswith("D"):
                 parts = line.split()
                 if len(parts) >= 2:
                     try:
@@ -200,6 +211,7 @@ class MotorGateway:
                 "target_right": pwmr if dirr == FORWARD else (-pwmr if dirr == BACKWARD else 0),
                 "telemetry_age_ms": None if age is None else round(age * 1000),
                 "distance_cm": distance,
+                "bumper_pressed": self.bumper_pressed,
                 "watchdog": False,
                 "left_rpm": float(pwml),
                 "right_rpm": float(pwmr),

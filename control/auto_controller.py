@@ -36,13 +36,13 @@ class AutoController:
             clear_dist_cm=70.0,
         )
 
-        # 2. 獨立 YOLO 檢測框中心抗抖動追蹤控制器 (視野出現鞋子框時取消避障，專注追蹤)
+        # 2. 獨立 YOLO 檢測框中心抗抖動追蹤控制器
         self.shoe_tracker = ShoeTrackerController(
             target_center_x=320.0,
             deadband_px=30.0,
             smoothing_alpha=0.3,
             stop_dist_cm=15.0,
-            full_shoe_height_ratio=0.60,
+            full_shoe_height_ratio=0.35,
         )
 
     def _transition(self, state, now, reason):
@@ -56,16 +56,11 @@ class AutoController:
         self.reason = reason
 
     def trigger(self, event, score):
-        if event not in ("alarm", "alarm_clock"):
-            return False
         now = time.monotonic()
         with self.lock:
-            if self.state not in ("IDLE", "DONE", "FAILED"):
-                return False
             self.alert = event
             self.alert_score = score
-            self.scan_steps = 0
-            self._transition("SEARCH_PAUSE", now, f"initial camera check: {event}")
+            self._transition("TRACKING_SHOE", now, f"Audio event triggered shoe tracking mission: {event}")
             return True
 
     def emergency_stop(self):
@@ -95,45 +90,70 @@ class AutoController:
         with self.lock:
             elapsed = now - self.state_since
 
-            if self.state in ("DONE", "FAILED", "E_STOP"):
+            if self.state == "E_STOP":
                 return self._stop(self.reason)
 
-            if not motor_status["ready"]:
-                self._transition("FAILED", now, "Arduino telemetry unavailable")
-                return self._stop(self.reason)
+            if not motor_status.get("ready", True):
+                return self._stop("Arduino telemetry unavailable")
 
-            distance = motor_status["distance_cm"]
-
-            # -------------------------------------------------------------
-            # AUTO 模式下優先檢測：若 YOLO 連續 5 幀穩定辨識到拖鞋，啟動獨立 ShoeTracker
-            # -------------------------------------------------------------
-            if target is not None:
-                cmd, track_reason = self.shoe_tracker.tick(target, distance)
-                self.command = cmd
-                self.reason = track_reason
-                return self.command
+            distance = motor_status.get("distance_cm")
+            bumper_pressed = motor_status.get("bumper_pressed", False)  # True if B1, False if B0
 
             # -------------------------------------------------------------
-            # IDLE / 無目標狀態：重置追蹤器並執行寵物自由漫遊與 65cm 超聲波自動避障
+            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 5 秒
             # -------------------------------------------------------------
-            self.shoe_tracker.reset()
-            if self.state in ("IDLE", "SEARCH_PAUSE", "SEARCH_TURN"):
+            if self.state == "HIT_SHOE":
+                if elapsed < 5.0:
+                    remaining = 5.0 - elapsed
+                    self.command = (0, 0)
+                    self.reason = f"👟 Reached shoe & B1 bumper triggered! Holding position 5s ({remaining:.1f}s remaining)..."
+                    return self.command
+                else:
+                    # 5 秒時間到：重置回 IDLE 隨機漫遊，清除警報
+                    self.alert = ""
+                    self.alert_score = 0.0
+                    self._transition("IDLE", now, "5s shoe hold complete -> Returning to ordinary random wander")
+                    self.pet_wander.reset()
+                    self.shoe_tracker.reset()
+                    return (0, 0)
+
+            # -------------------------------------------------------------
+            # 2. 警報/門鈴觸發後的追蹤鞋子狀態 (TRACKING_SHOE)
+            # -------------------------------------------------------------
+            if self.state == "TRACKING_SHOE":
+                # 判斷是否抵達並撞到鞋子 (YOLO 檢測鞋子面積大 AND 串口返回 B1 碰撞)
+                is_large_shoe = False
+                if target is not None:
+                    h_ratio = target.get("height_ratio", 0.0)
+                    w_ratio = target.get("width_ratio", 0.0)
+                    # 鞋子面積大：高度佔比 >= 35% 或 面積佔比 >= 12%
+                    is_large_shoe = (h_ratio >= 0.35 or (w_ratio * h_ratio) >= 0.12)
+
+                if is_large_shoe and bumper_pressed:
+                    self._transition("HIT_SHOE", now, "👟 Large shoe detected & Bumper B1 pressed! Holding 5s.")
+                    self.command = (0, 0)
+                    return self.command
+
+                # 若 YOLO 有檢測到鞋子目標，執行 ShoeTracker
+                if target is not None:
+                    cmd, track_reason = self.shoe_tracker.tick(target, distance)
+                    self.command = cmd
+                    self.reason = track_reason
+                    return self.command
+
+                # 追蹤模式下若暫時無目標，邊漫遊避障尋找鞋子
                 cmd, wander_reason = self.pet_wander.tick(distance)
                 self.command = cmd
-                self.reason = wander_reason
+                self.reason = f"Seeking shoe (AUTO tracking): {wander_reason}"
                 return self.command
 
-            if self.state == "FORWARD":
-                if elapsed >= self.forward_seconds:
-                    self._transition("DONE", now, "timed forward run complete")
-                    return self._stop(self.reason)
-                cmd, track_reason = self.shoe_tracker.tick(target, distance)
-                self.command = cmd
-                self.reason = track_reason
-                return self.command
-
-            self._transition("FAILED", now, "unknown state")
-            return self._stop(self.reason)
+            # -------------------------------------------------------------
+            # 3. 普通 IDLE 隨機漫遊狀態 (NORMAL)
+            # -------------------------------------------------------------
+            cmd, wander_reason = self.pet_wander.tick(distance)
+            self.command = cmd
+            self.reason = wander_reason
+            return self.command
 
     def get_status(self):
         with self.lock:

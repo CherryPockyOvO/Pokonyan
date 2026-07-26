@@ -673,11 +673,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                     last_trigger_time = now
                     send_event_to_pi(top_name, top_score)
 
-        if latest_audio_status.get("category") != "NORMAL":
-            if now - latest_audio_status.get("last_event_time", 0.0) >= 5.0:
-                latest_audio_status["category"] = "NORMAL"
-                latest_audio_status["alarm_event"] = ""
-                latest_audio_status["alarm_score"] = 0.0
+        # Alarm / Doorbell category stays active until cleared by mission completion
 
 def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
     if os.path.exists(cert_file) and os.path.exists(key_file):
