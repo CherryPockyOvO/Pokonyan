@@ -59,6 +59,9 @@ class AutoController:
     def trigger(self, event, score):
         now = time.monotonic()
         with self.lock:
+            if self.state == "HIT_SHOE":
+                print(f"[AutoController] 🛡️ Currently holding position in HIT_SHOE state -> Ignoring incoming audio event '{event}' until 2s hold completes!")
+                return False
             self.alert = event
             self.alert_score = score
             self.scan_steps = 0

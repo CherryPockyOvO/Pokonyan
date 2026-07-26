@@ -48,12 +48,13 @@ class ShoeTrackerController:
         self.pause_until = 0.0
         self.reason = "Shoe tracker initialized"
 
-    def reset(self):
+    def reset(self, full_reset=True):
         """重置追蹤器狀態與步進脈衝狀態。"""
         with self.lock:
             self.smoothed_dx = 0.0
             self.has_smoothed = False
-            self.arrived_at_shoe_standby = False
+            if full_reset:
+                self.arrived_at_shoe_standby = False
             self.pulse_state = "IDLE"
             self.pulse_cmd = (0, 0)
             self.pulse_until = 0.0
@@ -61,14 +62,14 @@ class ShoeTrackerController:
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：<15%遠距離組合鍵，15%-22%近距離降速150與1s停頓原地旋轉，>=22%嚴格鎖定(0,0)等待撞擊。"""
+        """核心追蹤週期函數：超聲波<=45cm嚴格鎖定(0,0)等待撞擊，<16%遠距離組合鍵，>=16%近距離降速150與1s停頓原地旋轉。"""
         now = time.monotonic()
         with self.lock:
             if self.arrived_at_shoe_standby:
                 return (0, 0), "🛑 Arrived at shoe: Strictly locked (0, 0), waiting for B1 bumper collision"
 
             if target is None:
-                self.reset()
+                self.reset(full_reset=False)
                 return (0, 0), "No target for tracking"
 
             raw_dx = target["center_x"] - self.target_center_x
