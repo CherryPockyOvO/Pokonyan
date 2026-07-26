@@ -5,13 +5,29 @@ Outputs completed sentences in alternating CYAN / YELLOW colors,
 and pushes 100% completed sentences to Raspberry Pi over HTTP POST.
 """
 
+import os
 import sys
 import json
 import time
 import argparse
 import urllib.request
+import subprocess
 from colorama import Fore, Style, init
-from RealtimeSTT import AudioToTextRecorder
+
+# Ensure RealtimeSTT package path is available
+rt_dir = r"c:\Users\ZgZhi\Desktop\RealtimeSTT"
+if os.path.exists(rt_dir) and rt_dir not in sys.path:
+    sys.path.insert(0, rt_dir)
+
+try:
+    from RealtimeSTT import AudioToTextRecorder
+except ImportError:
+    print("[STT] Installing RealtimeSTT package...")
+    if os.path.exists(rt_dir):
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", rt_dir])
+    else:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "RealtimeSTT"])
+    from RealtimeSTT import AudioToTextRecorder
 
 init(autoreset=True)
 
