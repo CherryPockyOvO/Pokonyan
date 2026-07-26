@@ -19,6 +19,19 @@ except ImportError:
     print("[PC Audio] Installing missing 'sounddevice' package...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "sounddevice"])
 
+# Ensure TFLite / LiteRT interpreter is installed
+try:
+    from ai_edge_litert.interpreter import Interpreter
+except ImportError:
+    try:
+        from tflite_runtime.interpreter import Interpreter
+    except ImportError:
+        try:
+            from tensorflow.lite import Interpreter
+        except ImportError:
+            print("[PC Audio] Installing missing TFLite interpreter 'ai-edge-litert'...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "ai-edge-litert"])
+
 # Ensure local perception directory can be imported
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
