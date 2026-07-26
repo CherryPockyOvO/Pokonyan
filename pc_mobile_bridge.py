@@ -466,6 +466,7 @@ def run_mobile_stt(pi_host, pi_port):
             text = text.strip()
             if text and text != last_live_text:
                 last_live_text = text
+                print(f"\r💬 [Mobile STT Live Draft] {text}                       ", end="", flush=True)
                 send_transcript_to_pi(pi_host, pi_port, text, is_live=True)
 
         def process_text(text):
@@ -475,7 +476,7 @@ def run_mobile_stt(pi_host, pi_port):
                 return
             sentence_count += 1
             last_live_text = ""
-            print(f"[Mobile STT Final #{sentence_count}] {text}")
+            print(f"\n✅ [Mobile STT Final #{sentence_count}] {text}")
             send_transcript_to_pi(pi_host, pi_port, text, is_live=False)
 
         recorder_config = {
@@ -487,12 +488,14 @@ def run_mobile_stt(pi_host, pi_port):
             'enable_realtime_transcription': True,
             'realtime_processing_pause': 0.15,
             'on_realtime_transcription_update': text_detected,
+            'on_final_transcription': process_text,
+            'use_microphone': False,
             'post_speech_silence_duration': 0.6,
             'min_length_of_recording': 0.5,
             'spinner': False,
         }
         recorder = AudioToTextRecorder(**recorder_config)
-        print(f"[Mobile Mic STT] CUDA GPU STT listening on iPhone audio feed!")
+        print(f"[Mobile Mic STT] CUDA GPU STT ready & listening on iPhone WebSocket audio feed!")
 
         while True:
             time.sleep(0.02)
@@ -500,7 +503,9 @@ def run_mobile_stt(pi_host, pi_port):
                 raw_bytes = stt_bytes_queue.pop(0)
                 recorder.feed_audio(raw_bytes)
     except Exception as e:
-        print(f"[Mobile Mic STT Warning] {e}")
+        import traceback
+        print(f"[Mobile Mic STT Error] {e}")
+        traceback.print_exc()
 
 def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
     phone_connected_event.wait()
