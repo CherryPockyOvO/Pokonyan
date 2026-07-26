@@ -768,6 +768,33 @@ def start_display_server_5001(ssl_context=None):
     except Exception as e:
         print(f"[Display Server 5001 Warning] {e}")
 
+def run_pi_status_syncer(pi_host, pi_port):
+    """Background syncer thread that polls Pi 8080 status and forces Port 5000 UI back to NORMAL when Pi resets."""
+    url = f"http://{pi_host}:{pi_port}/status"
+    while True:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Port5000Syncer"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                audio_info = data.get("audio", {})
+                robot_info = data.get("robot", {})
+
+                pi_category = audio_info.get("category", "NORMAL")
+                pi_state = robot_info.get("state", "IDLE")
+
+                # If Pi has returned to NORMAL or IDLE, and local Port 5000 is still displaying ALARM/DOORBELL:
+                if pi_category == "NORMAL" and pi_state in ("IDLE", "E_STOP"):
+                    if latest_audio_status.get("category") != "NORMAL":
+                        print(f"\n🟢 [Port 5000 Syncer] Raspberry Pi status returned to NORMAL ({pi_state}) -> Resetting Port 5000 UI banner to NORMAL!")
+                        latest_audio_status["category"] = "NORMAL"
+                        latest_audio_status["alarm_event"] = ""
+                        latest_audio_status["alarm_score"] = 0.0
+                        latest_audio_status["event"] = "-"
+                        latest_audio_status["event_score"] = 0.0
+        except Exception:
+            pass
+        time.sleep(0.4)
+
 def main():
     global PI_HOST, PI_PORT
     parser = argparse.ArgumentParser(description="PC Mobile Audio Bridge Server")
@@ -791,6 +818,9 @@ def main():
 
     stt_thread = threading.Thread(target=run_mobile_stt, args=(args.pi_host, args.pi_port), daemon=True)
     stt_thread.start()
+
+    syncer_thread = threading.Thread(target=run_pi_status_syncer, args=(args.pi_host, args.pi_port), daemon=True)
+    syncer_thread.start()
 
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
 

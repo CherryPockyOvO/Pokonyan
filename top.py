@@ -342,8 +342,24 @@ def main():
             target = None if detector is None else detector.get_target(max_age=0.5)
             motor_stat = motor.get_status()
             command = manager.tick(target, motor_stat)
-            motor.set_target(*command)
-            current = manager.get_status()
+            # 每一個 Tick 即時檢查任務完成復位狀態
+            if manager.auto_ctrl.alert == "":
+                if status_category != "NORMAL":
+                    status_category = "NORMAL"
+                    alarm_event_name = ""
+                    alarm_score = 0.0
+                    print("[Top] 🟢 5秒停留完成，全系統狀態重置恢復 NORMAL！")
+                    def send_async_reset():
+                        for host in ["127.0.0.1", "100.97.77.52", "localhost"]:
+                            try:
+                                url_reset = f"http://{host}:5000/reset_audio_status"
+                                payload = json.dumps({"category": "NORMAL"}).encode("utf-8")
+                                req = urllib.request.Request(url_reset, data=payload, headers={"Content-Type": "application/json"})
+                                with urllib.request.urlopen(req, timeout=0.5):
+                                    pass
+                            except Exception:
+                                pass
+                    threading.Thread(target=send_async_reset, daemon=True).start()
 
             bumper_pressed = motor_stat.get("bumper_pressed", False)
             bumper_str = "💥 B1 (COLLISION 撞擊)" if bumper_pressed else "🟢 B0 (NO BUMP 沒撞擊)"
