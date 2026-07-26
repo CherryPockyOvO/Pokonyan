@@ -100,19 +100,19 @@ class AutoController:
             bumper_pressed = motor_status.get("bumper_pressed", False)  # True if B1, False if B0
 
             # -------------------------------------------------------------
-            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 5 秒
+            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 2 秒後重新啟動
             # -------------------------------------------------------------
             if self.state == "HIT_SHOE":
-                if elapsed < 5.0:
-                    remaining = 5.0 - elapsed
+                if elapsed < 2.0:
+                    remaining = 2.0 - elapsed
                     self.command = (0, 0)
-                    self.reason = f"👟 Valid shoe hit! Holding position 5s ({remaining:.1f}s remaining)..."
+                    self.reason = f"👟 Valid shoe hit! Holding position 2s ({remaining:.1f}s remaining)..."
                     return self.command
                 else:
-                    # 5 秒時間到：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL
+                    # 2 秒時間到：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL，重新啟動
                     self.alert = ""
                     self.alert_score = 0.0
-                    self._transition("IDLE", now, "5s shoe hold complete -> Resuming ordinary AUTO wander")
+                    self._transition("IDLE", now, "2s shoe hold complete -> Resuming ordinary AUTO wander")
                     self.pet_wander.reset()
                     self.shoe_tracker.reset()
                     return (0, 0)
@@ -121,9 +121,9 @@ class AutoController:
             # 2. 聲響觸發後的拖鞋追蹤狀態 (TRACKING_SHOE)
             # -------------------------------------------------------------
             if self.state == "TRACKING_SHOE":
-                # A) 碰撞檢測：撞擊鞋子 (觸發微動開關 B1) 即進入 5 秒停留
+                # A) 碰撞檢測：撞擊鞋子 (觸發微動開關 B1) 即進入 2 秒停留
                 if bumper_pressed:
-                    self._transition("HIT_SHOE", now, "👟 Shoe collision! (B1 bumper pressed) -> Holding 5s.")
+                    self._transition("HIT_SHOE", now, "👟 Shoe collision! (B1 bumper pressed) -> Holding 2s.")
                     self.command = (0, 0)
                     return self.command
 

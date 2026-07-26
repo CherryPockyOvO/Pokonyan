@@ -84,17 +84,17 @@ class ShoeTrackerController:
             dx = self.smoothed_dx
 
             # -------------------------------------------------------------
-            # 階段 1: 鞋子面積/高度達到 15% (>= 0.15) -> 停止等待撞擊 (0, 0)
+            # 階段 1: 鞋子面積/高度達到 22% (>= 0.22) -> 停止等待撞擊 (0, 0)
             # -------------------------------------------------------------
-            if shoe_size_ratio >= 0.15:
+            if shoe_size_ratio >= 0.22:
                 self.pulse_state = "IDLE"
-                self.reason = f"🛑 Arrived at shoe (Ratio {shoe_size_ratio*100:.1f}% >= 15%): Stopped (0, 0), waiting for B1 bumper collision"
+                self.reason = f"🛑 Arrived at shoe (Ratio {shoe_size_ratio*100:.1f}% >= 22%): Stopped (0, 0), waiting for B1 bumper collision"
                 return (0, 0), self.reason
 
             # -------------------------------------------------------------
-            # 階段 2: 鞋子面積/高度在 10% ~ 15% 之間 (0.10 <= Ratio < 0.15) -> 近距離模式
+            # 階段 2: 鞋子面積/高度在 15% ~ 22% 之間 (0.15 <= Ratio < 0.22) -> 近距離模式 (實時消抖更新)
             # -------------------------------------------------------------
-            if shoe_size_ratio >= 0.10:
+            if shoe_size_ratio >= 0.15:
                 # 步進脈衝狀態機處理 (轉 0.15s -> 停頓 1.0s 讀幀)
                 if self.pulse_state == "PULSING":
                     if now < self.pulse_until:
@@ -102,11 +102,11 @@ class ShoeTrackerController:
                     else:
                         self.pulse_state = "PAUSING"
                         self.pause_until = now + self.pulse_pause_sec
-                        return (0, 0), "🎯 Near Mode (10%-15%): Steering pulse pause 1.0s (inspecting frame)"
+                        return (0, 0), "🎯 Near Mode (15%-22%): Step pulse pause 1.0s (inspecting frame)"
 
                 if self.pulse_state == "PAUSING":
                     if now < self.pause_until:
-                        return (0, 0), "🎯 Near Mode (10%-15%): Steering pulse pause 1.0s (inspecting frame)"
+                        return (0, 0), "🎯 Near Mode (15%-22%): Step pulse pause 1.0s (inspecting frame)"
                     else:
                         self.pulse_state = "IDLE"
 
@@ -134,16 +134,16 @@ class ShoeTrackerController:
                 return self.pulse_cmd, self.reason
 
             # -------------------------------------------------------------
-            # 階段 3: 鞋子面積/高度小於 10% (< 0.10) -> 遠距離模式 (組合鍵 WA/WD 逼近)
+            # 階段 3: 鞋子面積/高度小於 15% (< 0.15) -> 遠距離模式 (實時消抖更新，組合鍵 WA/WD 逼近)
             # -------------------------------------------------------------
             self.pulse_state = "IDLE"
             if abs(dx) <= self.deadband_px:
                 cmd = (220, 220)
-                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 10%): Centered -> Drive Forward (220, 220)"
+                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 15%): Centered -> Drive Forward (220, 220)"
             elif dx < 0:
                 cmd = (80, 220)  # 左前弧線 WA (80, 220)
-                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 10%): Curved Left (WA: 80, 220)"
+                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 15%): Curved Left (WA: 80, 220)"
             else:
                 cmd = (220, 80)  # 右前弧線 WD (220, 80)
-                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 10%): Curved Right (WD: 220, 80)"
+                self.reason = f"🎯 Far Pursuit (Ratio {shoe_size_ratio*100:.1f}% < 15%): Curved Right (WD: 220, 80)"
             return cmd, self.reason

@@ -346,7 +346,7 @@ def main():
                     status_category = "NORMAL"
                     alarm_event_name = ""
                     alarm_score = 0.0
-                    print("[Top] 🟢 5秒停留完成，全系統狀態重置恢復 NORMAL！", flush=True)
+                    print("[Top] 🟢 2秒停留完成，全系統狀態重置恢復 NORMAL！", flush=True)
                     def send_async_reset():
                         for host in ["127.0.0.1", "100.97.77.52", "localhost"]:
                             try:
@@ -369,7 +369,7 @@ def main():
             elif auto_state == "TRACKING_SHOE":
                 seeking_str = "🔍 SEEKING SHOE (尋找鞋子中)"
             elif auto_state == "HIT_SHOE":
-                seeking_str = "👟 HIT SHOE (已撞到鞋子, 停留5秒)"
+                seeking_str = "👟 HIT SHOE (已撞到鞋子, 停留2秒)"
             else:
                 seeking_str = "💤 WANDERING (普通漫遊)"
 

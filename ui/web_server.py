@@ -153,7 +153,7 @@ async function poll(){
     } else if (autoState === 'TRACKING_SHOE') {
       seekingBox.innerHTML = `<span class="doorbell-banner">🔍 SEEKING SHOE (尋找鞋子中)</span>`;
     } else if (autoState === 'HIT_SHOE') {
-      seekingBox.innerHTML = `<span class="red-alert-banner">👟 HIT SHOE (已撞到鞋子, 停留5秒)</span>`;
+      seekingBox.innerHTML = `<span class="red-alert-banner">👟 HIT SHOE (已撞到鞋子, 停留2秒)</span>`;
     } else {
       seekingBox.innerHTML = `<span style="color:#58a6ff;">💤 WANDERING (普通漫遊)</span>`;
     }
