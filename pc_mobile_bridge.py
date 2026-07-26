@@ -68,7 +68,7 @@ MOBILE_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>📱 Pokonyan 華為手機麥克風 & 終端控制台</title>
+<title>📱 Pokonyan iPhone / 手機麥克風 & 終端控制台</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
@@ -96,12 +96,12 @@ body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
 <body>
 
 <div class="header">
-  <h1>📱 華為手機麥克風 & Pokonyan 控制台</h1>
+  <h1>📱 iPhone / 手機麥克風 & Pokonyan 控制台</h1>
 </div>
 
-<!-- 🎙️ 華為手機麥克風開關 -->
+<!-- 🎙️ iPhone / 手機麥克風開關 -->
 <div class="card">
-  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟華為手機麥克風 (Stream Mic to PC)</button>
+  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟 iPhone / 手機麥克風 (Stream Mic to PC)</button>
   <div id="mic-status" style="font-size: 12px; color: #8b949e; margin-top: 6px; text-align: center;">點擊按鈕授權麥克風，即可將手機當作電腦麥克風使用</div>
 </div>
 
