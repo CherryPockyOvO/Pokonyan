@@ -135,6 +135,8 @@ def main():
         motor_ready = motor is not None and motor.get_status()["ready"]
         return vision_ready and motor_ready
 
+    latest_transcript = ""
+
     def audio_event(event, score):
         print(f"[Top] Audio event: {event} ({score:.2f})")
         if event in ("alarm", "alarm_clock"):
@@ -144,16 +146,31 @@ def main():
             else:
                 print("[Top] Mission ignored: vision or Arduino is not ready")
 
+    def transcribe_text(text):
+        nonlocal latest_transcript
+        latest_transcript = text
+        print(f"[Top <- C++ GPU Audio Client] Received transcript: '{text}'")
+        text_lower = text.lower()
+        if any(k in text_lower for k in ["alarm", "start", "find", "shoe", "seek"]):
+            if system_ready():
+                accepted = manager.trigger_alarm("alarm", 1.0)
+                print(f"[Top] Voice command triggered mission: {accepted}")
+            else:
+                print("[Top] Voice command ignored: vision or Arduino is not ready")
+
     def emergency_stop():
         manager.emergency_stop()
         if motor is not None:
             motor.emergency_stop()
 
     def status():
+        audio_stat = {} if audio is None else audio.get_status()
+        if latest_transcript:
+            audio_stat["text"] = latest_transcript
         return {
             "robot": manager.get_status(),
             "vision": {} if detector is None else detector.get_status(),
-            "audio": {} if audio is None else audio.get_status(),
+            "audio": audio_stat,
             "motor": {} if motor is None else motor.get_status(),
         }
 
@@ -169,6 +186,7 @@ def main():
             set_mode_callback=manager.set_mode,
             manual_cmd_callback=manager.handle_manual_command,
             audio_event_callback=audio_event,
+            transcribe_text_callback=transcribe_text,
             host="0.0.0.0",
             port=args.port,
         )

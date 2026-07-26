@@ -1,10 +1,18 @@
-# ---- Model Files (Allow NCNN, TFLite, and binary models in repo) ----
+# ---- Model Files ----
 !model/
 !model/**
 !*.tflite
-!*.bin
 !*.ncnn.bin
 !*.ncnn.param
+
+# ---- C++ Build & Models ----
+cpp_audio_client/build/
+cpp_audio_client/models/
+*.exe
+*.obj
+*.lib
+*.pdb
+ggml-*.bin
 
 # ---- Audio Files ----
 *.wav
