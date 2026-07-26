@@ -106,11 +106,6 @@ body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
   <div id="mic-status" style="font-size: 12px; color: #8b949e; margin-top: 6px; text-align: center;">點擊按鈕授權麥克風，即可將手機當作電腦麥克風使用</div>
 </div>
 
-<!-- 🎥 樹莓派即時視訊 (同源代理) -->
-<div class="video-container">
-  <img id="stream-img" src="/video_feed" alt="即時視訊載入中...">
-</div>
-
 <!-- 🚨 聲音識別與門鈴標誌位 -->
 <div class="card">
   <div class="label">Doorbell / Alarm Status (Flag 標誌位)</div>
@@ -278,6 +273,8 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         pass
 
 class MobileBridgeHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, format, *args):
         pass
 
@@ -287,24 +284,6 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(MOBILE_HTML.encode("utf-8"))
-            return
-
-        # Reverse Proxy: Camera Video Feed
-        if self.path == "/video_feed":
-            url = f"http://{PI_HOST}:{PI_PORT}/video_feed"
-            try:
-                req = urllib.request.urlopen(url, timeout=5.0)
-                self.send_response(200)
-                for header, val in req.headers.items():
-                    self.send_header(header, val)
-                self.end_headers()
-                while True:
-                    chunk = req.read(4096)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-            except Exception as e:
-                self.send_error(502, f"Proxy Video Error: {e}")
             return
 
         # Reverse Proxy: Robot Status JSON
@@ -453,6 +432,54 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                     send_event_to_pi(top_name, top_score)
 
 import socket
+import ssl
+import datetime
+
+def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        return cert_file, key_file
+
+    print("[SSL] Generating self-signed HTTPS certificate for iOS Safari / iPhone Microphone access...")
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "Pokonyan Mobile Bridge"),
+        ])
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.utcnow()
+        ).not_valid_after(
+            datetime.datetime.utcnow() + datetime.timedelta(days=365)
+        ).sign(key, hashes.SHA256())
+
+        with open(key_file, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+
+        with open(cert_file, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        print(f"[SSL] Certificate created: {cert_file}, {key_file}")
+    except Exception as e:
+        print(f"[SSL Warning] Failed to generate certificate: {e}")
+
+    return cert_file, key_file
 
 def get_all_ip_addresses():
     ip_list = []
@@ -472,6 +499,7 @@ def main():
     parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi IP (default: 100.80.242.72)")
     parser.add_argument("--pi-port", type=int, default=8080, help="Raspberry Pi web port (default: 8080)")
     parser.add_argument("--model", default="model/yamnet.tflite", help="Path to yamnet.tflite model")
+    parser.add_argument("--no-ssl", action="store_true", help="Disable HTTPS SSL and run on pure HTTP")
     args = parser.parse_args()
 
     PI_HOST = args.pi_host
@@ -486,21 +514,40 @@ def main():
     yamnet_thread.start()
 
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
+    
+    if not args.no_ssl:
+        cert_file, key_file = ensure_ssl_cert()
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            try:
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+                server.socket = ctx.wrap_socket(server.socket, server_side=True)
+                protocol = "https"
+            except Exception as e:
+                print(f"[SSL Warning] TLS init failed: {e}, running pure HTTP")
+                protocol = "http"
+        else:
+            protocol = "http"
+    else:
+        protocol = "http"
+
     ips = get_all_ip_addresses()
 
     print(f"========================================================")
     print(f" 📱 Pokonyan Mobile Mic & Reverse Proxy Bridge Server  ")
     print(f"========================================================")
     print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
-    print(f"🌐 Mobile Phone HTTP URLs (Pure HTTP, No SSL errors):")
+    print(f"🌐 iPhone / Mobile HTTPS URLs (Required for iOS Safari Mic):")
     for ip in ips:
         if ip.startswith("100."):
-            print(f"   👉 http://{ip}:{args.port}/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
+            print(f"   👉 {protocol}://{ip}:{args.port}/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
         elif ip.startswith("10.") or ip.startswith("192.168."):
-            print(f"   👉 http://{ip}:{args.port}/   🏠 (局域網實體 Wi-Fi IP)")
+            print(f"   👉 {protocol}://{ip}:{args.port}/   🏠 (局域網實體 Wi-Fi IP)")
         else:
-            print(f"   👉 http://{ip}:{args.port}/")
-    print(f"🎙️ 請在 iPhone / 華為 / Android 手機瀏覽器開啟網址！\n")
+            print(f"   👉 {protocol}://{ip}:{args.port}/")
+    print(f"🎙️ 請在 iPhone Safari 開啟 https:// 網址，並授權麥克風！\n")
 
     try:
         server.serve_forever()
