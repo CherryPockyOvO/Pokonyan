@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""PC Mobile Audio & Control Bridge for Pokonyan.
-手機 Web 端音訊與控制橋接器（全同源代理，相容 iPhone / 華為 / Android）：
-1. 透過 HTTP 提供純淨、超低延遲的雙向串流。
-2. 同源反向代理樹莓派的 /video_feed (視訊流), /status (狀態), /control (遙控按鈕), /mode (模式切換)。
-3. 手機開啟瀏覽器即可將「手機麥克風」實時串流給電腦 YAMNet 與 RealtimeSTT 進行識別。
+"""PC Mobile Audio & Control Bridge for Pokonyan (WebSocket Long-Connection Mode).
+iPhone / 手機麥克風與控制台橋接器（WebSocket 100% 實時音訊串流版）：
+1. 手機 Safari 透過 WebSocket (wss://) 長連接將麥克風 PCM 音訊實時傳送給電腦（繞過 iOS 限制）。
+2. 電腦 YAMNet 與 CUDA RealtimeSTT 雙神經網絡實時處理 iPhone 麥克風音訊。
+3. 同源反向代理樹莓派的 /status (狀態), /control (遙控按鈕), /mode (模式切換)。
 """
 
 import os
 import sys
 import time
+import ssl
 import json
+import socket
+import base64
+import struct
+import hashlib
+import datetime
 import argparse
-import urllib.request
 import threading
+import numpy as np
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-import numpy as np
 
 if hasattr(sys.stdout, 'reconfigure'):
     try:
@@ -98,8 +103,6 @@ body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
 .doorbell-banner { background: #d97706; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
 .red-alert-banner { background: #da3633; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
 @keyframes pulse { from { opacity: 0.8; transform: scale(0.98); } to { opacity: 1; transform: scale(1.02); } }
-.video-container { width: 100%; border-radius: 6px; overflow: hidden; background: #000; margin-bottom: 12px; }
-.video-container img { width: 100%; height: auto; display: block; }
 </style>
 </head>
 <body>
@@ -157,12 +160,14 @@ let isMicStreaming = false;
 let audioContext = null;
 let scriptNode = null;
 let mediaStream = null;
+let ws = null;
 
 async function toggleMicrophone() {
   const btn = document.getElementById('btn-mic');
   const status = document.getElementById('mic-status');
 
   if (isMicStreaming) {
+    if (ws) ws.close();
     if (scriptNode) scriptNode.disconnect();
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     if (audioContext) audioContext.close();
@@ -182,10 +187,23 @@ async function toggleMicrophone() {
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
+
+      // Establish WebSocket connection
+      const wsProtocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws_audio`);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        status.textContent = '🟢 WebSocket 麥克風長連接建立成功！正在實時向電腦串流音訊中...';
+        status.style.color = '#7ee787';
+      };
+
       const source = audioContext.createMediaStreamSource(mediaStream);
+      scriptNode = audioContext.createScriptProcessor(2048, 1, 1);
       
-      scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
-      
+      const silenceGain = audioContext.createGain();
+      silenceGain.gain.value = 0; // Prevent local audio feedback loop
+
       scriptNode.onaudioprocess = (e) => {
         if (!isMicStreaming) return;
         const inputData = e.inputBuffer.getChannelData(0);
@@ -194,21 +212,25 @@ async function toggleMicrophone() {
           let s = Math.max(-1, Math.min(1, inputData[i]));
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
-        fetch('/stream_pcm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/octet-stream' },
-          body: pcm16.buffer
-        }).catch(err => console.log('PCM upload error:', err));
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(pcm16.buffer);
+        } else {
+          fetch('/stream_pcm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: pcm16.buffer
+          }).catch(err => console.log('PCM upload error:', err));
+        }
       };
 
       source.connect(scriptNode);
-      scriptNode.connect(audioContext.destination);
+      scriptNode.connect(silenceGain);
+      silenceGain.connect(audioContext.destination);
 
       isMicStreaming = true;
       btn.textContent = '🛑 iPhone 麥克風收音中 (點擊停止)';
       btn.classList.add('btn-mic-on');
-      status.textContent = '🟢 iPhone 麥克風正在向電腦實時串流音訊中...';
-      status.style.color = '#7ee787';
     } catch (err) {
       alert('無法存取 iPhone 麥克風：' + err.message);
       status.textContent = '存取麥克風失敗：' + err.message;
@@ -280,6 +302,51 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     def handle_error(self, request, client_address):
         pass
 
+def process_audio_payload(pcm_bytes):
+    if not pcm_bytes:
+        return
+
+    if not phone_connected_event.is_set():
+        phone_connected_event.set()
+        print("\n[MobileBridge] 🎉 ✅ iPhone Microphone Connected & Authorized over WebSocket!")
+        print("[MobileBridge] 🚀 Starting YAMNet Sound Classifier & CUDA RealtimeSTT Pipelines...\n")
+
+    pcm16 = np.frombuffer(pcm_bytes, dtype=np.int16)
+    float32_samples = pcm16.astype(np.float32) / 32768.0
+    audio_pcm_queue.append(float32_samples)
+    stt_bytes_queue.append(pcm_bytes)
+
+def read_ws_frame(rfile):
+    head = rfile.read(2)
+    if not head or len(head) < 2:
+        return None, None
+    b1, b2 = head[0], head[1]
+    opcode = b1 & 0x0F
+    is_masked = (b2 & 0x80) != 0
+    payload_len = b2 & 0x7F
+
+    if payload_len == 126:
+        payload_len_bytes = rfile.read(2)
+        if len(payload_len_bytes) < 2:
+            return None, None
+        payload_len = struct.unpack(">H", payload_len_bytes)[0]
+    elif payload_len == 127:
+        payload_len_bytes = rfile.read(8)
+        if len(payload_len_bytes) < 8:
+            return None, None
+        payload_len = struct.unpack(">Q", payload_len_bytes)[0]
+
+    masks = rfile.read(4) if is_masked else None
+    data = rfile.read(payload_len)
+
+    if is_masked and masks and len(masks) == 4 and len(data) == payload_len:
+        data = bytearray(data)
+        for i in range(len(data)):
+            data[i] ^= masks[i % 4]
+        data = bytes(data)
+
+    return opcode, data
+
 class MobileBridgeHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -293,6 +360,32 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(MOBILE_HTML.encode("utf-8"))
             return
+
+        # WebSocket Upgrade
+        if self.path == "/ws_audio" or self.headers.get("Upgrade", "").lower() == "websocket":
+            key = self.headers.get("Sec-WebSocket-Key")
+            if key:
+                GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+                digest = hashlib.sha1((key + GUID).encode('utf-8')).digest()
+                accept_key = base64.b64encode(digest).decode('utf-8')
+
+                self.send_response(101, "Switching Protocols")
+                self.send_header("Upgrade", "websocket")
+                self.send_header("Connection", "Upgrade")
+                self.send_header("Sec-WebSocket-Accept", accept_key)
+                self.end_headers()
+
+                # Loop reading binary WebSocket frames
+                try:
+                    while True:
+                        opcode, frame_data = read_ws_frame(self.rfile)
+                        if opcode is None or opcode == 8:
+                            break
+                        if frame_data:
+                            process_audio_payload(frame_data)
+                except Exception:
+                    pass
+                return
 
         # Reverse Proxy: Robot Status JSON
         if self.path == "/status":
@@ -311,20 +404,11 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        # Audio stream from mobile microphone
         if self.path == "/stream_pcm":
             content_length = int(self.headers.get("Content-Length", 0))
             pcm_bytes = self.rfile.read(content_length)
             if pcm_bytes:
-                if not phone_connected_event.is_set():
-                    phone_connected_event.set()
-                    print("\n[MobileBridge] 🎉 ✅ iPhone Microphone Connected & Authorized!")
-                    print("[MobileBridge] 🚀 Starting YAMNet Sound Classifier & CUDA RealtimeSTT Pipelines...\n")
-
-                pcm16 = np.frombuffer(pcm_bytes, dtype=np.int16)
-                float32_samples = pcm16.astype(np.float32) / 32768.0
-                audio_pcm_queue.append(float32_samples)
-                stt_bytes_queue.append(pcm_bytes)
+                process_audio_payload(pcm_bytes)
             
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -332,7 +416,6 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"ok": true}')
             return
 
-        # Reverse Proxy: WASD Control Command
         if self.path == "/control":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -349,7 +432,6 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                 self.send_error(502, f"Proxy Control Error: {e}")
             return
 
-        # Reverse Proxy: Mode Switch Command
         if self.path == "/mode":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -370,7 +452,7 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
 
 def run_mobile_stt(pi_host, pi_port):
     phone_connected_event.wait()
-    print(f"[Mobile Mic STT] Initializing RealtimeSTT CUDA GPU models (tiny.en + small.en)...")
+    print(f"[Mobile Mic STT] iPhone connected! Initializing RealtimeSTT CUDA GPU models (tiny.en + small.en)...")
     try:
         from pc_stt_client import send_transcript_to_pi
         from RealtimeSTT import AudioToTextRecorder
@@ -421,7 +503,7 @@ def run_mobile_stt(pi_host, pi_port):
 
 def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
     phone_connected_event.wait()
-    print(f"[Mobile Mic YAMNet] Initializing YAMNet TFLite interpreter...")
+    print(f"[Mobile Mic YAMNet] iPhone connected! Initializing YAMNet TFLite interpreter...")
     interp = Interpreter(model_path=model_path)
     input_details = interp.get_input_details()
     output_details = interp.get_output_details()
@@ -497,10 +579,6 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                     last_trigger_time = now
                     send_event_to_pi(top_name, top_score)
 
-import socket
-import ssl
-import datetime
-
 def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
     if os.path.exists(cert_file) and os.path.exists(key_file):
         return cert_file, key_file
@@ -560,7 +638,7 @@ def get_all_ip_addresses():
 
 def main():
     global PI_HOST, PI_PORT
-    parser = argparse.ArgumentParser(description="PC Mobile Audio & Proxy Bridge Server")
+    parser = argparse.ArgumentParser(description="PC Mobile Audio Bridge Server")
     parser.add_argument("--port", type=int, default=5000, help="PC Mobile Web server port (default: 5000)")
     parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi IP (default: 100.80.242.72)")
     parser.add_argument("--pi-port", type=int, default=8080, help="Raspberry Pi web port (default: 8080)")
@@ -576,11 +654,16 @@ def main():
         base_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(base_dir, "model", "yamnet.tflite")
 
+    # Start YAMNet processing thread
     yamnet_thread = threading.Thread(target=run_mobile_yamnet, args=(args.pi_host, args.pi_port, model_path, 0.20), daemon=True)
     yamnet_thread.start()
 
+    # Start RealtimeSTT processing thread
+    stt_thread = threading.Thread(target=run_mobile_stt, args=(args.pi_host, args.pi_port), daemon=True)
+    stt_thread.start()
+
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
-    
+
     if not args.no_ssl:
         cert_file, key_file = ensure_ssl_cert()
         if os.path.exists(cert_file) and os.path.exists(key_file):
@@ -602,10 +685,10 @@ def main():
     ips = get_all_ip_addresses()
 
     print(f"========================================================")
-    print(f" 📱 Pokonyan Mobile Mic & Reverse Proxy Bridge Server  ")
+    print(f" 📱 Pokonyan Mobile Mic & Control Bridge Server (WebSocket) ")
     print(f"========================================================")
     print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
-    print(f"🌐 iPhone / Mobile HTTPS URLs (Required for iOS Safari Mic):")
+    print(f"🌐 iPhone / Mobile HTTPS URLs:")
     for ip in ips:
         if ip.startswith("100."):
             print(f"   👉 {protocol}://{ip}:{args.port}/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
@@ -613,7 +696,7 @@ def main():
             print(f"   👉 {protocol}://{ip}:{args.port}/   🏠 (局域網實體 Wi-Fi IP)")
         else:
             print(f"   👉 {protocol}://{ip}:{args.port}/")
-    print(f"🎙️ 請在 iPhone Safari 開啟 https:// 網址，並授權麥克風！\n")
+    print(f"🎙️ 請在 iPhone Safari 開啟 {protocol}:// 網址，點擊「開啟 iPhone 麥克風」！\n")
 
     try:
         server.serve_forever()
