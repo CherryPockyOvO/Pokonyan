@@ -452,8 +452,9 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
 def run_mobile_stt(pi_host, pi_port):
+    print(f"[Mobile Mic STT] ⏳ Waiting for iPhone microphone connection before launching STT...")
     phone_connected_event.wait()
-    print(f"[Mobile Mic STT] iPhone connected! Initializing RealtimeSTT CUDA GPU models (tiny.en + small.en)...")
+    print(f"[Mobile Mic STT] 🎉 iPhone connected! Initializing RealtimeSTT CUDA GPU models (tiny.en + small.en)...")
     try:
         from pc_stt_client import send_transcript_to_pi
         from RealtimeSTT import AudioToTextRecorder
@@ -488,7 +489,6 @@ def run_mobile_stt(pi_host, pi_port):
             'enable_realtime_transcription': True,
             'realtime_processing_pause': 0.15,
             'on_realtime_transcription_update': text_detected,
-            'on_final_transcription': process_text,
             'use_microphone': False,
             'post_speech_silence_duration': 0.6,
             'min_length_of_recording': 0.5,
@@ -497,19 +497,28 @@ def run_mobile_stt(pi_host, pi_port):
         recorder = AudioToTextRecorder(**recorder_config)
         print(f"[Mobile Mic STT] CUDA GPU STT ready & listening on iPhone WebSocket audio feed!")
 
+        def feed_loop():
+            while True:
+                time.sleep(0.02)
+                while stt_bytes_queue:
+                    raw_bytes = stt_bytes_queue.pop(0)
+                    recorder.feed_audio(raw_bytes)
+
+        t_feed = threading.Thread(target=feed_loop, daemon=True)
+        t_feed.start()
+
         while True:
-            time.sleep(0.02)
-            while stt_bytes_queue:
-                raw_bytes = stt_bytes_queue.pop(0)
-                recorder.feed_audio(raw_bytes)
+            recorder.text(process_text)
+
     except Exception as e:
         import traceback
         print(f"[Mobile Mic STT Error] {e}")
         traceback.print_exc()
 
 def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
+    print(f"[Mobile Mic YAMNet] ⏳ Waiting for iPhone microphone connection before launching YAMNet...")
     phone_connected_event.wait()
-    print(f"[Mobile Mic YAMNet] iPhone connected! Initializing YAMNet TFLite interpreter...")
+    print(f"[Mobile Mic YAMNet] 🎉 iPhone connected! Initializing YAMNet TFLite interpreter...")
     interp = Interpreter(model_path=model_path)
     input_details = interp.get_input_details()
     output_details = interp.get_output_details()
