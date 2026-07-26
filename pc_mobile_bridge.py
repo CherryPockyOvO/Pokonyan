@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""PC Mobile Audio & Control Bridge for Pokonyan (WebSocket Long-Connection Mode).
-iPhone / 手機麥克風與控制台橋接器（WebSocket 100% 實時音訊串流版）：
-1. 手機 Safari 透過 WebSocket (wss://) 長連接將麥克風 PCM 音訊實時傳送給電腦（繞過 iOS 限制）。
-2. 電腦 YAMNet 與 CUDA RealtimeSTT 雙神經網絡實時處理 iPhone 麥克風音訊。
-3. 同源反向代理樹莓派的 /status (狀態), /control (遙控按鈕), /mode (模式切換)。
+"""PC Mobile Audio & Control Bridge for Pokonyan (Dual Port / Dedicated Display Mode).
+1. 埠號 5000: 超簡潔麥克風授權頁面（僅保留麥克風開啟按鈕與連線狀態，0 雜訊）。
+2. 埠號 5001 / /display: 專門為 iPhone 17 Pro Max 小車車載螢幕量身打造的超酷炫發光控制台（大字體完整句子 + 霓虹警報門鈴卡片）。
 """
 
 import os
@@ -89,65 +87,39 @@ def is_phone_connected():
 def wait_for_phone_connection(timeout=None):
     return phone_connected_event.wait(timeout=timeout)
 
-MOBILE_HTML = """<!DOCTYPE html>
+# 1. 超簡潔麥克風授權頁面 (埠號 5000)
+MIC_HTML = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>🤖 Pokonyan Robot Car Display</title>
+<title>🎙️ Pokonyan iPhone 麥克風串流</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-body { background: #05070a; color: #f0f6fc; padding: 14px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
-.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; background: #0d1117; padding: 10px 14px; border-radius: 12px; border: 1px solid #21262d; }
-.logo-title { font-size: 16px; font-weight: bold; color: #58a6ff; display: flex; align-items: center; gap: 8px; }
-.btn-mic { background: #238636; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
+body { background: #0d1117; color: #c9d1d9; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 28px 20px; width: 100%; max-width: 400px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+h1 { font-size: 20px; color: #58a6ff; margin-bottom: 20px; }
+.btn { background: #238636; color: white; border: none; border-radius: 12px; padding: 18px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; transition: all 0.2s ease; }
+.btn:active { transform: scale(0.98); }
 .btn-mic-on { background: #da3633; animation: pulse 1.0s infinite alternate; }
-
-/* Robot Sound Banners */
-.status-card { background: #0d1117; border: 2px solid #21262d; border-radius: 16px; padding: 18px; text-align: center; margin-bottom: 14px; transition: all 0.3s ease; }
-.banner-normal { background: rgba(35, 134, 54, 0.15); border-color: #238636; color: #3fb950; }
-.banner-doorbell { background: rgba(217, 119, 6, 0.25); border-color: #f59e0b; color: #fbbf24; animation: glow-gold 1.0s infinite alternate; }
-.banner-alarm { background: rgba(218, 54, 51, 0.25); border-color: #f85149; color: #ff7b72; animation: glow-red 0.8s infinite alternate; }
-
-.status-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 6px; font-weight: bold; }
-.status-headline { font-size: 26px; font-weight: 900; letter-spacing: 0.5px; }
-
-/* High-Legibility STT Display Box */
-.stt-card { background: #0d1117; border: 1px solid #30363d; border-radius: 16px; padding: 18px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
-.stt-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold; }
-.stt-final { font-size: 28px; font-weight: 800; color: #58a6ff; line-height: 1.3; min-height: 70px; word-break: break-word; }
-.stt-live { font-size: 20px; font-weight: 600; color: #e3b341; line-height: 1.3; margin-top: 14px; min-height: 32px; word-break: break-word; }
-
-@keyframes glow-gold { from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); } to { box-shadow: 0 0 25px rgba(245, 158, 11, 0.8); } }
-@keyframes glow-red { from { box-shadow: 0 0 10px rgba(248, 81, 73, 0.4); } to { box-shadow: 0 0 30px rgba(248, 81, 73, 0.9); } }
-@keyframes pulse { from { opacity: 0.8; } to { opacity: 1.0; } }
+#status-box { font-size: 14px; color: #8b949e; margin-top: 16px; line-height: 1.5; }
+.link-box { margin-top: 24px; font-size: 13px; }
+.link-box a { color: #58a6ff; text-decoration: none; font-weight: bold; }
+@keyframes pulse { from { opacity: 0.85; } to { opacity: 1.0; } }
 </style>
 </head>
 <body>
 
-<!-- 頂部精簡控制條 -->
-<div class="top-bar">
-  <div class="logo-title">🤖 Pokonyan 車載螢幕</div>
-  <button id="btn-mic" class="btn-mic" onclick="toggleMicrophone()">🎙️ 開啟麥克風</button>
-</div>
+<div class="card">
+  <h1>📱 iPhone 麥克風串流端</h1>
+  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)</button>
+  <div id="status-box">點擊按鈕授權麥克風，即可將 iPhone 當作電腦與小車麥克風使用</div>
 
-<!-- 🚨 車載警報與門鈴動態標誌位 (全螢幕霓虹發光) -->
-<div id="status-card" class="status-card banner-normal">
-  <div class="status-title">ENVIRONMENT SOUND STATUS</div>
-  <div id="status-headline" class="status-headline">🟢 NORMAL</div>
-  <div id="sound-detail" style="font-size: 14px; margin-top: 6px; opacity: 0.8;">-</div>
+  <div class="link-box">
+    🖥️ 另一支手機/車載螢幕展示頁面：<br>
+    <a href="/display" target="_blank">👉 點此開啟車載螢幕展示頁面 (/display)</a>
+  </div>
 </div>
-
-<!-- 💬 車載大字體語音識別 (Final Sentence 28px + Realtime Draft 20px) -->
-<div class="stt-card">
-  <div class="stt-label">💬 COMPLETED SENTENCE (完整語音)</div>
-  <div id="transcript" class="stt-final">-</div>
-  
-  <div class="stt-label" style="margin-top: 16px;">⚡ REALTIME STREAMING DRAFT (實時草稿)</div>
-  <div id="live_transcript" class="stt-live">-</div>
-</div>
-
-<div id="mic-status" style="font-size: 12px; color: #8b949e; text-align: center; margin-top: 8px;">點擊「開啟麥克風」授權串流</div>
 
 <script>
 let isMicStreaming = false;
@@ -158,7 +130,7 @@ let ws = null;
 
 async function toggleMicrophone() {
   const btn = document.getElementById('btn-mic');
-  const status = document.getElementById('mic-status');
+  const status = document.getElementById('status-box');
 
   if (isMicStreaming) {
     if (ws) ws.close();
@@ -166,7 +138,7 @@ async function toggleMicrophone() {
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     if (audioContext) audioContext.close();
     isMicStreaming = false;
-    btn.textContent = '🎙️ 開啟麥克風';
+    btn.textContent = '🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)';
     btn.classList.remove('btn-mic-on');
     status.textContent = '麥克風已停止串流';
     status.style.color = '#8b949e';
@@ -222,7 +194,7 @@ async function toggleMicrophone() {
       silenceGain.connect(audioContext.destination);
 
       isMicStreaming = true;
-      btn.textContent = '🛑 麥克風收音中';
+      btn.textContent = '🛑 iPhone 麥克風收音中 (點擊停止)';
       btn.classList.add('btn-mic-on');
     } catch (err) {
       alert('無法存取麥克風：' + err.message);
@@ -231,7 +203,70 @@ async function toggleMicrophone() {
     }
   }
 }
+</script>
+</body>
+</html>
+"""
 
+# 2. 專門為 iPhone 小車車載螢幕量身打造的展示頁面 (埠號 5001 或 /display)
+DISPLAY_HTML = """<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🤖 Pokonyan Robot Display Screen</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+html, body { height: 100%; overflow: hidden; background: #030508; color: #f0f6fc; }
+body { padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
+
+/* 頂部車載 Title Bar */
+.top-bar { text-align: center; background: #0d1117; padding: 12px; border-radius: 12px; border: 1px solid #21262d; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+.logo-title { font-size: 18px; font-weight: 900; color: #58a6ff; letter-spacing: 1px; display: flex; justify-content: center; align-items: center; gap: 8px; }
+
+/* 全螢幕動態發光警報/門鈴卡片 */
+.status-card { background: #0d1117; border: 2px solid #21262d; border-radius: 18px; padding: 22px 16px; text-align: center; margin-bottom: 14px; transition: all 0.3s ease; }
+.banner-normal { background: rgba(35, 134, 54, 0.12); border-color: #238636; color: #3fb950; }
+.banner-doorbell { background: rgba(217, 119, 6, 0.25); border-color: #f59e0b; color: #fbbf24; animation: glow-gold 1.0s infinite alternate; }
+.banner-alarm { background: rgba(218, 54, 51, 0.25); border-color: #f85149; color: #ff7b72; animation: glow-red 0.8s infinite alternate; }
+
+.status-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: #8b949e; margin-bottom: 8px; font-weight: bold; }
+.status-headline { font-size: 28px; font-weight: 900; letter-spacing: 0.5px; }
+
+/* 車載超大字體高可讀性語音識別卡片 */
+.stt-card { background: #0d1117; border: 1px solid #30363d; border-radius: 18px; padding: 20px 16px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.stt-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+.stt-final { font-size: 30px; font-weight: 900; color: #58a6ff; line-height: 1.35; min-height: 80px; word-break: break-word; text-shadow: 0 0 12px rgba(88, 166, 255, 0.3); }
+.stt-live { font-size: 22px; font-weight: 700; color: #e3b341; line-height: 1.35; margin-top: 16px; min-height: 36px; word-break: break-word; text-shadow: 0 0 10px rgba(227, 179, 65, 0.3); }
+
+@keyframes glow-gold { from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); } to { box-shadow: 0 0 30px rgba(245, 158, 11, 0.9); } }
+@keyframes glow-red { from { box-shadow: 0 0 10px rgba(248, 81, 73, 0.4); } to { box-shadow: 0 0 35px rgba(248, 81, 73, 1.0); } }
+</style>
+</head>
+<body>
+
+<!-- 車載 Header Bar -->
+<div class="top-bar">
+  <div class="logo-title">🤖 POKONYAN ROBOT DISPLAY</div>
+</div>
+
+<!-- 🚨 車載警報與門鈴動態標誌位 (全屏霓虹發光) -->
+<div id="status-card" class="status-card banner-normal">
+  <div class="status-title">ENVIRONMENT SOUND STATUS</div>
+  <div id="status-headline" class="status-headline">🟢 NORMAL</div>
+  <div id="sound-detail" style="font-size: 15px; margin-top: 8px; opacity: 0.85;">-</div>
+</div>
+
+<!-- 💬 車載大字體語音識別 (Final Sentence 30px + Realtime Draft 22px) -->
+<div class="stt-card">
+  <div class="stt-label">💬 COMPLETED SENTENCE (完整語音)</div>
+  <div id="transcript" class="stt-final">-</div>
+  
+  <div class="stt-label" style="margin-top: 20px;">⚡ REALTIME STREAMING DRAFT (實時草稿)</div>
+  <div id="live_transcript" class="stt-live">-</div>
+</div>
+
+<script>
 async function pollStatus() {
   try {
     const res = await fetch('/status');
@@ -333,11 +368,20 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        if self.path == "/" or self.path.startswith("/mobile"):
+        # 1. 專門車載展示頁面 (/display)
+        if self.path == "/display":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(MOBILE_HTML.encode("utf-8"))
+            self.wfile.write(DISPLAY_HTML.encode("utf-8"))
+            return
+
+        # 2. 超簡潔麥克風串流頁面 (/)
+        if self.path == "/" or self.path.startswith("/mic"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(MIC_HTML.encode("utf-8"))
             return
 
         # WebSocket Upgrade
@@ -415,39 +459,30 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"ok": true}')
             return
 
-        if self.path == "/control":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            url = f"http://{PI_HOST}:{PI_PORT}/control"
-            try:
-                req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
-                    data = resp.read()
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(data)
-            except Exception as e:
-                self.send_error(502, f"Proxy Control Error: {e}")
-            return
-
-        if self.path == "/mode":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            url = f"http://{PI_HOST}:{PI_PORT}/mode"
-            try:
-                req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
-                    data = resp.read()
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(data)
-            except Exception as e:
-                self.send_error(502, f"Proxy Mode Error: {e}")
-            return
-
         self.send_error(404)
+
+# 專門展示頁面 Handler (埠號 5001)
+class DisplayPageHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        if self.path == "/status":
+            combined_status = {
+                "audio": latest_audio_status,
+                "robot": {"mode": "AUTO"}
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(combined_status).encode("utf-8"))
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(DISPLAY_HTML.encode("utf-8"))
 
 def run_mobile_stt(pi_host, pi_port):
     print(f"[Mobile Mic STT] ⏳ Waiting for iPhone microphone connection before launching STT...")
@@ -559,7 +594,6 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         top_class = top_indices[0]
         top_score = scores[top_class]
 
-        # Cumulative Confidence Score summation for Doorbell & Alarm families
         doorbell_scores = [(label, scores[idx]) for idx, label in DOORBELL_CLASSES.items() if idx < len(scores)]
         doorbell_sum = sum(s for _, s in doorbell_scores if s >= 0.02)
         top_doorbell = max(doorbell_scores, key=lambda x: x[1]) if doorbell_scores else ("doorbell", 0.0)
@@ -571,7 +605,6 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         now = time.monotonic()
         top_name = ALL_CLASS_NAMES.get(top_class, f"class_{top_class}")
 
-        # Classification decision based on CUMULATIVE CONFIDENCE SUMS (Threshold: 0.15 cumulative sum)
         if alarm_sum >= 0.15 and alarm_sum >= doorbell_sum:
             name = top_alarm[0]
             score = alarm_sum
@@ -672,6 +705,17 @@ def get_all_ip_addresses():
         pass
     return ip_list
 
+def start_display_server_5001(ssl_context=None):
+    try:
+        server_5001 = ThreadedHTTPServer(("0.0.0.0", 5001), DisplayPageHandler)
+        if ssl_context:
+            server_5001.socket = ssl_context.wrap_socket(server_5001.socket, server_side=True)
+        print(f"[Display Server 5001] 📺 Dedicated Robot Display Server running on Port 5001...")
+        t_5001 = threading.Thread(target=server_5001.serve_forever, daemon=True)
+        t_5001.start()
+    except Exception as e:
+        print(f"[Display Server 5001 Warning] {e}")
+
 def main():
     global PI_HOST, PI_PORT
     parser = argparse.ArgumentParser(description="PC Mobile Audio Bridge Server")
@@ -690,16 +734,16 @@ def main():
         base_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(base_dir, "model", "yamnet.tflite")
 
-    # Start YAMNet processing thread
     yamnet_thread = threading.Thread(target=run_mobile_yamnet, args=(args.pi_host, args.pi_port, model_path, 0.20), daemon=True)
     yamnet_thread.start()
 
-    # Start RealtimeSTT processing thread
     stt_thread = threading.Thread(target=run_mobile_stt, args=(args.pi_host, args.pi_port), daemon=True)
     stt_thread.start()
 
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
 
+    ctx = None
+    protocol = "http"
     if not args.no_ssl:
         cert_file, key_file = ensure_ssl_cert()
         if os.path.exists(cert_file) and os.path.exists(key_file):
@@ -713,26 +757,26 @@ def main():
             except Exception as e:
                 print(f"[SSL Warning] TLS init failed: {e}, running pure HTTP")
                 protocol = "http"
-        else:
-            protocol = "http"
-    else:
-        protocol = "http"
+                ctx = None
+
+    # Start secondary dedicated display server on port 5001
+    start_display_server_5001(ssl_context=ctx)
 
     ips = get_all_ip_addresses()
 
     print(f"========================================================")
-    print(f" 📱 Pokonyan Mobile Mic & Control Bridge Server (WebSocket) ")
+    print(f" 📱 Pokonyan Dual-Port Audio & Display Server Running  ")
     print(f"========================================================")
     print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
-    print(f"🌐 iPhone / Mobile HTTPS URLs:")
+    print(f"🎙️ 埠號 5000 (超簡潔麥克風串流端):")
     for ip in ips:
         if ip.startswith("100."):
-            print(f"   👉 {protocol}://{ip}:{args.port}/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
-        elif ip.startswith("10.") or ip.startswith("192.168."):
-            print(f"   👉 {protocol}://{ip}:{args.port}/   🏠 (局域網實體 Wi-Fi IP)")
-        else:
-            print(f"   👉 {protocol}://{ip}:{args.port}/")
-    print(f"🎙️ 請在 iPhone Safari 開啟 {protocol}:// 網址，點擊「開啟 iPhone 麥克風」！\n")
+            print(f"   👉 {protocol}://{ip}:5000/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
+    print(f"\n📺 埠號 5001 (專門 iPhone 車載螢幕展示端):")
+    for ip in ips:
+        if ip.startswith("100."):
+            print(f"   👉 {protocol}://{ip}:5001/   ⭐【車載螢幕推薦】(或開 5000/display)")
+    print(f"========================================================\n")
 
     try:
         server.serve_forever()
