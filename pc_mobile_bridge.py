@@ -536,49 +536,49 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         top_class = top_indices[0]
         top_score = scores[top_class]
 
-        alarm_hits = []
-        for idx, label in ALARM_CLASSES.items():
-            if idx < len(scores) and scores[idx] >= threshold:
-                alarm_hits.append((label, scores[idx]))
+        # Cumulative Confidence Score summation for Doorbell & Alarm families
+        doorbell_scores = [(label, scores[idx]) for idx, label in DOORBELL_CLASSES.items() if idx < len(scores)]
+        doorbell_sum = sum(s for _, s in doorbell_scores if s >= 0.02)
+        top_doorbell = max(doorbell_scores, key=lambda x: x[1]) if doorbell_scores else ("doorbell", 0.0)
 
-        doorbell_hits = []
-        for idx, label in DOORBELL_CLASSES.items():
-            if idx < len(scores) and scores[idx] >= threshold:
-                doorbell_hits.append((label, scores[idx]))
+        alarm_scores = [(label, scores[idx]) for idx, label in ALARM_CLASSES.items() if idx < len(scores)]
+        alarm_sum = sum(s for _, s in alarm_scores if s >= 0.02)
+        top_alarm = max(alarm_scores, key=lambda x: x[1]) if alarm_scores else ("alarm", 0.0)
 
         now = time.monotonic()
         top_name = ALL_CLASS_NAMES.get(top_class, f"class_{top_class}")
 
-        if alarm_hits:
-            alarm_hits.sort(key=lambda x: x[1], reverse=True)
-            name, score = alarm_hits[0]
+        # Classification decision based on CUMULATIVE CONFIDENCE SUMS (Threshold: 0.15 cumulative sum)
+        if alarm_sum >= 0.15 and alarm_sum >= doorbell_sum:
+            name = top_alarm[0]
+            score = alarm_sum
             latest_audio_status["category"] = "ALARM"
             latest_audio_status["alarm_event"] = name
             latest_audio_status["alarm_score"] = float(score)
             latest_audio_status["event"] = name
             latest_audio_status["event_score"] = float(score)
             latest_audio_status["last_event_time"] = now
-            print(f"\r🚨 [Mobile Mic -> YAMNet ALARM] {name} ({score:.2f})       ", end="", flush=True)
+            print(f"\r🚨 [Mobile Mic -> YAMNet ALARM] {name} (Sum: {score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
                 send_event_to_pi(name, score)
 
-        elif doorbell_hits:
-            doorbell_hits.sort(key=lambda x: x[1], reverse=True)
-            name, score = doorbell_hits[0]
+        elif doorbell_sum >= 0.15:
+            name = top_doorbell[0]
+            score = doorbell_sum
             latest_audio_status["category"] = "DOORBELL"
             latest_audio_status["alarm_event"] = name
             latest_audio_status["alarm_score"] = float(score)
             latest_audio_status["event"] = name
             latest_audio_status["event_score"] = float(score)
             latest_audio_status["last_event_time"] = now
-            print(f"\r🔔 [Mobile Mic -> YAMNet DOORBELL] {name} ({score:.2f})       ", end="", flush=True)
+            print(f"\r🔔 [Mobile Mic -> YAMNet DOORBELL] {name} (Sum: {score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
                 send_event_to_pi(name, score)
 
         else:
-            if top_score >= 0.15:
+            if top_score >= 0.12:
                 latest_audio_status["event"] = top_name
                 latest_audio_status["event_score"] = float(top_score)
                 print(f"\r🎵 [Mobile Mic -> YAMNet Live] {top_name} ({top_score:.2f})       ", end="", flush=True)
