@@ -323,6 +323,20 @@ class StreamingHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
             return
 
+        if path == "/set_shoe_tracking":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode("utf-8")) if body else {}
+                enabled = bool(data.get("enabled", True))
+                callback = type(self).set_shoe_tracking_callback
+                if callback is not None:
+                    callback(enabled)
+                self._json(200, {"ok": True, "enabled": enabled})
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+            return
+
         if path == "/manual_command":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -382,6 +396,7 @@ class WebStreamServer:
         robot_status_provider=None,
         emergency_stop=None,
         set_mode_callback=None,
+        set_shoe_tracking_callback=None,
         manual_cmd_callback=None,
         audio_event_callback=None,
         transcribe_text_callback=None,
@@ -393,6 +408,7 @@ class WebStreamServer:
         StreamingHandler.status_provider = robot_status_provider
         StreamingHandler.emergency_stop = emergency_stop
         StreamingHandler.set_mode_callback = set_mode_callback
+        StreamingHandler.set_shoe_tracking_callback = set_shoe_tracking_callback
         StreamingHandler.manual_cmd_callback = manual_cmd_callback
         StreamingHandler.audio_event_callback = audio_event_callback
         StreamingHandler.transcribe_text_callback = transcribe_text_callback

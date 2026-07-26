@@ -30,6 +30,7 @@ class AutoController:
         self.scan_pause_seconds = 2.0
         self.forward_seconds = 10.0
         self.ever_saw_large_shoe = False
+        self.shoe_tracking_enabled = True  # 是否啟動拖鞋追蹤功能（預設開啟）
 
         # 1. 寵物自由漫遊與 65cm 超聲波自動避障控制器
         self.pet_wander = PetWanderController(
@@ -46,6 +47,14 @@ class AutoController:
             full_shoe_height_ratio=0.35,
         )
 
+    def set_shoe_tracking(self, enabled):
+        with self.lock:
+            self.shoe_tracking_enabled = bool(enabled)
+            print(f"[AutoController] 👟 拖鞋追蹤功能開關變更: {self.shoe_tracking_enabled}")
+            if not self.shoe_tracking_enabled and self.state == "TRACKING_SHOE":
+                self.reset()
+            return self.shoe_tracking_enabled
+
     def _transition(self, state, now, reason):
         if state != self.state:
             print(f"[AutoController] {self.state} -> {state}: {reason}")
@@ -60,6 +69,9 @@ class AutoController:
     def trigger(self, event, score):
         now = time.monotonic()
         with self.lock:
+            if not self.shoe_tracking_enabled:
+                print(f"[AutoController] 👟 收到聲響 '{event}'，但用戶已關閉拖鞋追蹤功能 -> 忽略追蹤任務")
+                return False
             self.alert = event
             self.alert_score = score
             self.ever_saw_large_shoe = False  # 觸發新聲響任務時重置先決條件標誌
@@ -175,4 +187,5 @@ class AutoController:
                 "scan_steps": self.scan_steps,
                 "command_left": self.command[0],
                 "command_right": self.command[1],
+                "shoe_tracking_enabled": self.shoe_tracking_enabled,
             }

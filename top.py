@@ -57,6 +57,10 @@ class RobotDualModeManager:
                     self.auto_ctrl.reset()
             return True
 
+    def set_shoe_tracking(self, enabled):
+        with self.lock:
+            return self.auto_ctrl.set_shoe_tracking(enabled)
+
     def handle_manual_command(self, cmd):
         if self.mode != "MANUAL":
             return False
@@ -275,6 +279,7 @@ def main():
             robot_status_provider=status,
             emergency_stop=emergency_stop,
             set_mode_callback=manager.set_mode,
+            set_shoe_tracking_callback=manager.set_shoe_tracking,
             manual_cmd_callback=manager.handle_manual_command,
             audio_event_callback=audio_event,
             transcribe_text_callback=transcribe_text,
