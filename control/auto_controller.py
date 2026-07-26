@@ -134,10 +134,10 @@ class AutoController:
                     self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
                 else:
-                    # 追蹤中暫時沒看到鞋子：原地保持靜止 (0, 0) 待命，絕不盲目衝刺
-                    cmd = (0, 0)
+                    # 追蹤中暫時沒看到鞋子：慢速前進尋找 (150, 150)
+                    cmd = (150, 150)
                     self.command = cmd
-                    self.reason = "Seeking shoe target: Standby (0, 0), waiting for target in camera frame"
+                    self.reason = "Seeking shoe target: Slow forward searching (150, 150), looking for shoe"
                     return self.command
 
             # -------------------------------------------------------------
