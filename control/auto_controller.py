@@ -133,7 +133,14 @@ class AutoController:
                     self.command = (0, 0)
                     return self.command
 
-                # B) 發現鞋子特判：在任何時刻（含 6 次旋轉掃描期間）只要發現鞋子，立刻中止旋轉掃描，直接追蹤！
+                # B) 抵達鞋子前 (45cm 超聲波內) 靜止等待 B1 撞擊特判：100% 嚴格鎖定靜止 (0, 0)，絕不上前或旋轉！
+                if self.shoe_tracker.arrived_at_shoe_standby:
+                    cmd, track_reason = self.shoe_tracker.tick(target, distance)
+                    self.command = (0, 0)
+                    self.reason = f"[Waiting B1 Bump] {track_reason}"
+                    return self.command
+
+                # C) 發現鞋子特判：在任何時刻（含 6 次旋轉掃描期間）只要發現鞋子，立刻中止旋轉掃描，直接追蹤！
                 if target is not None:
                     self.last_seen_target_time = now
                     self.scan_steps = 0
