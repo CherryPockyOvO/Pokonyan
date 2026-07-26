@@ -60,28 +60,19 @@ def run_ssh_paramiko(host, user, password, command, prefix, color, stop_event):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         print(f"{color}[{prefix}]{COLOR_RESET} Connecting to {user}@{host} with auto-login (Password: ******)...")
-        ssh.connect(hostname=host, username=user, password=password, timeout=10)
+        ssh.connect(hostname=host, username=user, password=password, timeout=15, banner_timeout=30)
         print(f"{color}[{prefix}]{COLOR_RESET} SSH Login Successful! Launching top.py...")
 
-        channel = ssh.get_transport().open_session()
-        channel.get_pty()
-        channel.exec_command(command)
-
-        buf = ""
+        stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
         while not stop_event.is_set():
-            if channel.recv_ready():
-                data = channel.recv(1024).decode('utf-8', errors='ignore')
-                buf += data
-                while '\n' in buf:
-                    line, buf = buf.split('\n', 1)
-                    line_str = line.strip()
-                    if line_str:
-                        print(f"{color}[{prefix}]{COLOR_RESET} {line_str}")
-            elif channel.exit_status_ready():
+            line = stdout.readline()
+            if not line:
                 break
-            time.sleep(0.05)
+            line_str = line.strip()
+            if line_str:
+                print(f"{color}[{prefix}]{COLOR_RESET} {line_str}")
     except Exception as e:
-        print(f"{color}[{prefix}]{COLOR_RESET} SSH Connection Error: {e}")
+        print(f"{color}[{prefix}]{COLOR_RESET} SSH Connection Note: {e}")
     finally:
         try:
             ssh.close()
@@ -129,8 +120,6 @@ def main():
     cmd_yamnet = [sys.executable, os.path.join(BASE_DIR, "pc_audio_client.py"), "--pi-host", args.pi_host]
     p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
     t3 = threading.Thread(target=stream_output, args=(p3, "YAMNet", COLOR_YAMNET), daemon=True)
-    t3.start()
-    procs.append(p3)
     t3.start()
     procs.append(p3)
 
