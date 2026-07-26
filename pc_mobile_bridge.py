@@ -281,6 +281,10 @@ setInterval(pollStatus, 300);
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
+    def handle_error(self, request, client_address):
+        # Suppress TLS handshake / pre-connect socket reset errors from iOS Safari
+        pass
+
 class MobileBridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress standard HTTP access logs for clean console
@@ -477,10 +481,16 @@ def main():
     if not args.no_ssl:
         cert_file, key_file = ensure_ssl_cert()
         if os.path.exists(cert_file) and os.path.exists(key_file):
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
-            server.socket = ctx.wrap_socket(server.socket, server_side=True)
-            protocol = "https"
+            try:
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+                server.socket = ctx.wrap_socket(server.socket, server_side=True)
+                protocol = "https"
+            except Exception as e:
+                print(f"[SSL Warning] TLS init failed: {e}, running pure HTTP")
+                protocol = "http"
         else:
             protocol = "http"
     else:
