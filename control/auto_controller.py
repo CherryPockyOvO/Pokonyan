@@ -143,48 +143,45 @@ class AutoController:
                     return (0, 0)
 
             # -------------------------------------------------------------
-            # 2. 追蹤鞋子狀態與避障屏蔽邏輯
+            # 2. 拖鞋追蹤與避障屏蔽邏輯（僅在【追蹤功能開啟 self.shoe_tracking_enabled == True】且有聲響任務時執行）
             # -------------------------------------------------------------
-            # 🎯 核心修復：只要處於聲響觸發的 TRACKING_SHOE 模式、視野中有鞋子，或已看到大鞋子，
-            # 均【100% 強制關閉超聲波避障】，防止在撞到鞋子前一刻誤把鞋子當成障礙物轉向繞開！
-            disable_obstacle_avoidance = (self.state == "TRACKING_SHOE") or (target is not None) or self.ever_saw_large_shoe
+            is_tracking_active = self.shoe_tracking_enabled and (self.state == "TRACKING_SHOE" or bool(self.alert))
 
-            # A) 檢測鏡頭中是否出現過較大鞋子（先決條件標誌位）：適度放寬閾值，近距離即刻鎖定
-            if target is not None:
-                h_ratio = target.get("height_ratio", 0.0)
-                w_ratio = target.get("width_ratio", 0.0)
-                # 高度佔比 >= 20% 或 面積佔比 >= 5% 即判定為近距離大鞋子
-                if h_ratio >= 0.20 or (w_ratio * h_ratio) >= 0.05:
-                    if not self.ever_saw_large_shoe:
-                        print("[AutoController] 🎯 Large shoe detected in camera frame! Prerequisite fulfilled -> Locking no-obstacle pursuit until B1 collision.")
-                        self.ever_saw_large_shoe = True
+            if is_tracking_active:
+                # A) 檢測鏡頭中是否出現過大鞋子（先決條件標誌位）
+                if target is not None:
+                    h_ratio = target.get("height_ratio", 0.0)
+                    w_ratio = target.get("width_ratio", 0.0)
+                    if h_ratio >= 0.20 or (w_ratio * h_ratio) >= 0.05:
+                        if not self.ever_saw_large_shoe:
+                            print("[AutoController] 🎯 Large shoe detected in camera frame! Prerequisite fulfilled.")
+                            self.ever_saw_large_shoe = True
 
-            # B) 撞擊有效性判斷：必須滿足【曾經出現過大鞋子 (ever_saw_large_shoe == True)】，碰撞 B1 才有效！
-            if self.ever_saw_large_shoe and bumper_pressed:
-                self._transition("HIT_SHOE", now, "👟 Shoe collision valid! (Prerequisite large shoe seen & B1 bumper pressed) -> Holding 5s.")
-                self.command = (0, 0)
-                return self.command
+                # B) 撞擊有效性判斷：必須滿足【曾經出現過大鞋子 (ever_saw_large_shoe == True)】，碰撞 B1 才有效！
+                if self.ever_saw_large_shoe and bumper_pressed:
+                    self._transition("HIT_SHOE", now, "👟 Shoe collision valid! (Prerequisite large shoe seen & B1 bumper pressed) -> Holding 5s.")
+                    self.command = (0, 0)
+                    return self.command
 
-            # C) 追蹤與衝刺直行（完全關閉避障，直到撞擊目標 B1）：
-            if disable_obstacle_avoidance:
+                # C) 專注衝刺追蹤拖鞋（關閉避障，直到撞擊目標 B1）：
                 if target is not None:
                     cmd, track_reason = self.shoe_tracker.tick(target, distance)
                     self.command = cmd
                     self.reason = f"[No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}] {track_reason}"
                     return self.command
                 else:
-                    # 追蹤中若鏡頭暫時失焦/丟失目標：保持直向前進 (220, 220) 專注衝刺撞擊，絕不進行避障拐彎！
                     cmd = (220, 220)
                     self.command = cmd
                     self.reason = f"Seeking target (No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}): Driving forward (220, 220)"
                     return self.command
 
             # -------------------------------------------------------------
-            # 3. 默認避障狀態 (視野無鞋子且未觸發大鞋子標誌位，執行 65cm 超聲波自動避障)
+            # 3. 追蹤關閉 或 無聲響任務：普通 IDLE 漫遊 (默認 65cm 超聲波自動避障)
             # -------------------------------------------------------------
+            self.ever_saw_large_shoe = False
             cmd, wander_reason = self.pet_wander.tick(distance)
             self.command = cmd
-            self.reason = f"[Default Obstacle Avoidance Active] {wander_reason}"
+            self.reason = f"[Ordinary Wander | Shoe Tracking OFF] {wander_reason}"
             return self.command
 
     def get_status(self):
