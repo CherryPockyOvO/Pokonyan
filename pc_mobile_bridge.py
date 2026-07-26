@@ -644,9 +644,9 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
     audio_buffer = np.zeros(window_samples, dtype=np.float32)
     last_trigger_time = 0.0
 
-    def send_event_to_pi(event, score):
+    def send_event_to_pi(category, event, score):
         url = f"http://{pi_host}:{pi_port}/trigger_audio_event"
-        payload = json.dumps({"event": event, "score": float(score)}).encode("utf-8")
+        payload = json.dumps({"category": category, "event": event, "score": float(score)}).encode("utf-8")
         req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=1.5) as resp:
@@ -698,7 +698,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
             print(f"\r🚨 [Mobile Mic -> YAMNet ALARM] {name} (Sum: {score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
-                send_event_to_pi(name, score)
+                send_event_to_pi("ALARM", name, score)
 
         elif doorbell_sum >= 0.20:
             name = top_doorbell[0]
@@ -712,7 +712,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
             print(f"\r🔔 [Mobile Mic -> YAMNet DOORBELL] {name} (Sum: {score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
-                send_event_to_pi(name, score)
+                send_event_to_pi("DOORBELL", name, score)
 
         else:
             if top_score >= 0.12:
@@ -721,7 +721,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                 print(f"\r🎵 [Mobile Mic -> YAMNet Live] {top_name} ({top_score:.2f})       ", end="", flush=True)
                 if now - last_trigger_time >= 0.4:
                     last_trigger_time = now
-                    send_event_to_pi(top_name, top_score)
+                    send_event_to_pi("NORMAL", top_name, top_score)
 
         # Alarm / Doorbell category stays active until cleared by mission completion
 

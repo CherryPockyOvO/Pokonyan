@@ -148,7 +148,7 @@ def main():
     alarm_score = 0.0
     alarm_ts = 0.0
 
-    def audio_event(event, score):
+    def audio_event(category, event, score):
         nonlocal latest_audio_event, latest_audio_score, latest_audio_ts
         nonlocal status_category, alarm_event_name, alarm_score, alarm_ts
         now = time.time()
@@ -156,34 +156,29 @@ def main():
         latest_audio_score = score
         latest_audio_ts = now
 
-        event_clean = event.lower().strip()
-        is_alarm = any(k in event_clean for k in ["alarm", "siren", "buzzer", "detector", "fire", "police", "ambulance"])
-        is_doorbell = any(k in event_clean for k in ["doorbell", "ding-dong", "bell", "chime", "ring", "ringtone", "jingle", "bicycle", "carillon"])
-
+        # 直接採信 PC 端 YAMNet 分類結果，不再自行重新分類
         current_cat = status_category
-        if is_alarm:
-            # 🚨 ALARM 屬於高優先級：無條件覆蓋 ALARM 或 DOORBELL，並重新觸發最新任務
+        if category == "ALARM":
             status_category = "ALARM"
             alarm_event_name = event
             alarm_score = score
             alarm_ts = now
-            print(f"[Top <- YAMNet] 🚨 [ALARM DETECTED]: '{event}' ({score:.2f})")
+            print(f"[Top <- PC YAMNet] 🚨 [ALARM DETECTED]: '{event}' ({score:.2f})")
             accepted = manager.trigger_alarm(event, score)
             print(f"[Top] 警報觸發/重置任務狀態: accepted={accepted}")
-        elif is_doorbell:
-            # 🔔 DOORBELL 僅在 NORMAL 或 DOORBELL 時覆蓋；絕不降級正在進行中的高優先級 ALARM
+        elif category == "DOORBELL":
             if current_cat != "ALARM":
                 status_category = "DOORBELL"
                 alarm_event_name = event
                 alarm_score = score
                 alarm_ts = now
-                print(f"[Top <- YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
+                print(f"[Top <- PC YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
                 accepted = manager.trigger_alarm(event, score)
                 print(f"[Top] 門鈴觸發/重置任務狀態: accepted={accepted}")
             else:
-                print(f"[Top <- YAMNet] 🔔 收到門鈴 '{event}'，但當前處於高優先級 ALARM 狀態 -> 保持 ALARM 優先")
+                print(f"[Top <- PC YAMNet] 🔔 收到門鈴 '{event}'，但當前處於高優先級 ALARM 狀態 -> 保持 ALARM 優先")
         else:
-            print(f"[Top <- YAMNet] Real-time sound: '{event}' ({score:.2f})")
+            print(f"[Top <- PC YAMNet] Real-time sound: '{event}' ({score:.2f})")
 
     def transcribe_text(text, is_live=False):
         nonlocal latest_transcript, latest_live_transcript

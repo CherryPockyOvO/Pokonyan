@@ -372,12 +372,13 @@ class StreamingHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body.decode("utf-8")) if body else {}
+                category = data.get("category", "NORMAL")
                 event = data.get("event", "alarm")
                 score = float(data.get("score", 1.0))
                 callback = type(self).audio_event_callback
                 if callback is not None:
-                    callback(event, score)
-                self._json(200, {"ok": True, "event": event, "score": score})
+                    callback(category, event, score)
+                self._json(200, {"ok": True, "category": category, "event": event, "score": score})
             except Exception as e:
                 self._json(400, {"error": str(e)})
             return
