@@ -381,6 +381,28 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
+        if self.path == "/transcribe_text":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode("utf-8"))
+                text = data.get("text", "").strip()
+                is_live = data.get("live", False)
+                if text:
+                    if is_live:
+                        latest_audio_status["live_text"] = text
+                    else:
+                        latest_audio_status["text"] = text
+                        latest_audio_status["live_text"] = ""
+            except Exception:
+                pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+            return
+
         if self.path == "/stream_pcm":
             content_length = int(self.headers.get("Content-Length", 0))
             pcm_bytes = self.rfile.read(content_length)

@@ -38,18 +38,29 @@ if hasattr(sys.stdout, 'reconfigure'):
         pass
 
 def send_transcript_to_pi(pi_host, port, text, is_live=False):
-    url = f"http://{pi_host}:{port}/transcribe_text"
     payload = json.dumps({"text": text, "live": is_live}).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}
-    )
+    
+    # 1. Push to Windows Local Port 5000 Web UI
     try:
-        with urllib.request.urlopen(req, timeout=2.0) as resp:
-            if not is_live:
-                print(f"[STT -> Pi {pi_host}] Sent Final Sentence: '{text}'")
-            return True
-    except Exception as e:
-        return False
+        url_local = "http://127.0.0.1:5000/transcribe_text"
+        req_local = urllib.request.Request(url_local, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req_local, timeout=0.5):
+            pass
+    except Exception:
+        pass
+
+    # 2. Push to Raspberry Pi
+    try:
+        url_pi = f"http://{pi_host}:{port}/transcribe_text"
+        req_pi = urllib.request.Request(url_pi, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req_pi, timeout=1.0):
+            pass
+    except Exception:
+        pass
+
+    if not is_live:
+        print(f"[STT -> Web & Pi] Sent Final Sentence: '{text}'")
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description="RealtimeSTT CUDA GPU Client for Pokonyan")
