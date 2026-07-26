@@ -303,22 +303,7 @@ def main():
                 motor = MotorGateway(dry_run=True)
                 motor.start()
 
-        if not args.vision_only and not args.no_audio:
-            try:
-                from perception.audio_pipeline import YamnetWhisperAudioPipeline
-
-                audio = YamnetWhisperAudioPipeline(
-                    yamnet_model_path=local_path(args.yamnet),
-                    whisper_model_path=local_path(args.whisper),
-                    speech_threshold=args.speech_thresh,
-                    event_threshold=args.event_thresh,
-                    on_event=audio_event,
-                )
-                audio.start()
-                if web is not None:
-                    StreamingHandler.audio = audio
-            except Exception as e:
-                print(f"[Top] Audio pipeline init warning: {e}")
+        # 註：已移除樹莓派本地麥克風硬體調用，所有聲學識別與語音傳輸統一經由 Port 5000 手機/網絡音訊串流處理！
 
         if args.simulate_alarm:
             deadline = time.monotonic() + 15.0

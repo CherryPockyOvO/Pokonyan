@@ -719,9 +719,6 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                 latest_audio_status["event"] = top_name
                 latest_audio_status["event_score"] = float(top_score)
                 print(f"\r🎵 [Mobile Mic -> YAMNet Live] {top_name} ({top_score:.2f})       ", end="", flush=True)
-                if now - last_trigger_time >= 0.4:
-                    last_trigger_time = now
-                    send_event_to_pi(top_name, top_score)
 
         # Alarm / Doorbell category stays active until cleared by mission completion
 
