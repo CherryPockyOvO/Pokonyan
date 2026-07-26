@@ -94,39 +94,33 @@ MOBILE_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>📱 Pokonyan iPhone / 手機麥克風 & 終端控制台</title>
+<title>📱 Pokonyan iPhone / 手機麥克風 語音與聲音識別控制台</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
-.header { text-align: center; margin-bottom: 12px; }
-.header h1 { font-size: 18px; color: #58a6ff; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-.label { font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px; font-weight: bold; }
-.value { font-size: 15px; font-weight: bold; min-height: 22px; word-break: break-word; }
-.btn { background: #238636; color: white; border: none; border-radius: 6px; padding: 12px; font-size: 15px; font-weight: bold; width: 100%; cursor: pointer; text-align: center; }
+body { background: #0d1117; color: #c9d1d9; padding: 16px; font-size: 15px; }
+.header { text-align: center; margin-bottom: 16px; }
+.header h1 { font-size: 20px; color: #58a6ff; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.label { font-size: 12px; color: #8b949e; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; }
+.value { font-size: 16px; font-weight: bold; min-height: 24px; word-break: break-word; }
+.btn { background: #238636; color: white; border: none; border-radius: 8px; padding: 16px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; text-align: center; }
 .btn:active { opacity: 0.8; }
 .btn-mic-on { background: #da3633; animation: pulse 1.0s infinite alternate; }
-.btn-mode { background: #21262d; border: 1px solid #30363d; font-size: 13px; padding: 8px; }
-.btn-mode.active { background: #1f6feb; border-color: #388bfd; }
-.wasd-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 8px auto; }
-.btn-wasd { background: #21262d; color: white; font-size: 16px; padding: 14px; border: 1px solid #30363d; border-radius: 6px; }
-.btn-wasd:active { background: #1f6feb; }
-.btn-brake { background: #8b949e; color: #0d1117; }
-.doorbell-banner { background: #d97706; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
-.red-alert-banner { background: #da3633; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
+.doorbell-banner { background: #d97706; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
+.red-alert-banner { background: #da3633; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
 @keyframes pulse { from { opacity: 0.8; transform: scale(0.98); } to { opacity: 1; transform: scale(1.02); } }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>📱 iPhone / 手機麥克風 & Pokonyan 控制台</h1>
+  <h1>📱 iPhone 麥克風 & 聲音識別控制台</h1>
 </div>
 
 <!-- 🎙️ 手機麥克風開關 -->
 <div class="card">
   <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)</button>
-  <div id="mic-status" style="font-size: 12px; color: #8b949e; margin-top: 6px; text-align: center;">點擊按鈕授權麥克風，即可將 iPhone 當作電腦麥克風使用</div>
+  <div id="mic-status" style="font-size: 13px; color: #8b949e; margin-top: 8px; text-align: center;">點擊按鈕授權麥克風，即可將 iPhone 當作電腦麥克風使用</div>
 </div>
 
 <!-- 🚨 聲音識別與門鈴標誌位 -->
@@ -134,37 +128,17 @@ body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
   <div class="label">Doorbell / Alarm Status (Flag 標誌位)</div>
   <div id="alarm_flag_box" class="value"><span style="color:#7ee787;">🟢 NORMAL (No Event)</span></div>
   
-  <div class="label" style="margin-top: 8px;">Realtime Sound Classification (實時聲音分類)</div>
+  <div class="label" style="margin-top: 12px;">Realtime Sound Classification (實時聲音分類)</div>
   <div id="event" class="value" style="color:#58a6ff;">-</div>
 </div>
 
 <!-- 💬 STT 語音識別展演 -->
 <div class="card">
-  <div class="label">Last Completed Sentence (Final STT)</div>
-  <div id="transcript" class="value" style="color:#7ee787;">-</div>
+  <div class="label">Last Completed Sentence (Final STT 完整句子)</div>
+  <div id="transcript" class="value" style="color:#7ee787; font-size: 18px;">-</div>
   
-  <div class="label" style="margin-top: 8px;">Realtime Live Recognition (Streaming Draft)</div>
-  <div id="live_transcript" class="value" style="color:#e3b341;">-</div>
-</div>
-
-<!-- 🎮 遙控觸控面板 -->
-<div class="card">
-  <div class="label">Control Mode</div>
-  <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-    <button id="btn-auto" class="btn btn-mode active" onclick="setMode('AUTO')" style="flex:1;">🤖 AUTO Mode</button>
-    <button id="btn-manual" class="btn btn-mode" onclick="setMode('MANUAL')" style="flex:1;">🎮 MANUAL Mode</button>
-  </div>
-  <div class="wasd-pad">
-    <button class="btn btn-wasd" onclick="sendCmd('WA')">WA ↖</button>
-    <button class="btn btn-wasd" onclick="sendCmd('W')">W ↑</button>
-    <button class="btn btn-wasd" onclick="sendCmd('WD')">WD ↗</button>
-    <button class="btn btn-wasd" onclick="sendCmd('A')">A ←</button>
-    <button class="btn btn-wasd btn-brake" onclick="sendCmd('B')">B (Brake)</button>
-    <button class="btn btn-wasd" onclick="sendCmd('D')">D →</button>
-    <button class="btn btn-wasd" onclick="sendCmd('SA')">SA ↙</button>
-    <button class="btn btn-wasd" onclick="sendCmd('S')">S ↓</button>
-    <button class="btn btn-wasd" onclick="sendCmd('SD')">SD ↘</button>
-  </div>
+  <div class="label" style="margin-top: 12px;">Realtime Live Recognition (Streaming Draft 實時草稿)</div>
+  <div id="live_transcript" class="value" style="color:#e3b341; font-size: 16px;">-</div>
 </div>
 
 <script>
@@ -251,31 +225,12 @@ async function toggleMicrophone() {
   }
 }
 
-async function setMode(mode) {
-  fetch('/mode', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: mode })
-  });
-}
-
-async function sendCmd(cmd) {
-  fetch('/control', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command: cmd })
-  });
-}
-
 async function pollStatus() {
   try {
     const res = await fetch('/status');
+    if (!res.ok) return;
     const s = await res.json();
-    const a = s.audio || {};
-    const r = s.robot || {};
-
-    document.getElementById('btn-auto').classList.toggle('active', (r.mode === 'AUTO'));
-    document.getElementById('btn-manual').classList.toggle('active', (r.mode === 'MANUAL'));
+    const a = s.audio || s;
 
     const flagBox = document.getElementById('alarm_flag_box');
     const cat = a.category || 'NORMAL';
@@ -299,10 +254,12 @@ async function pollStatus() {
 
     document.getElementById('transcript').textContent = a.text || '-';
     document.getElementById('live_transcript').textContent = a.live_text || '-';
-  } catch (e) {}
+  } catch (e) {
+    console.log("Poll error:", e);
+  }
 }
 
-setInterval(pollStatus, 300);
+setInterval(pollStatus, 200);
 </script>
 </body>
 </html>
