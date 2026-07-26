@@ -105,14 +105,10 @@ def main():
     t1 = threading.Thread(target=run_ssh_paramiko, args=(args.pi_host, args.pi_user, args.pi_pass, pi_cmd, "Pi", COLOR_PI, stop_event), daemon=True)
     t1.start()
 
-    # Node 2: C++ GPU STT Client
-    if os.path.exists(cpp_exe):
-        cmd_cpp = [cpp_exe, "--pi-host", args.pi_host, "-m", model_file, "-l", "en"]
-    else:
-        cmd_cpp = ["cmd.exe", "/c", f"cd /d {cpp_dir} && call build_and_run.bat {args.pi_host}"]
-
-    p2 = subprocess.Popen(cmd_cpp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=cpp_dir)
-    t2 = threading.Thread(target=stream_output, args=(p2, "C++ GPU", COLOR_CPP), daemon=True)
+    # Node 2: RealtimeSTT CUDA GPU Speech Client (Dual-Model Refinement: tiny.en + small.en)
+    cmd_stt = [sys.executable, os.path.join(BASE_DIR, "pc_stt_client.py"), "--pi-host", args.pi_host]
+    p2 = subprocess.Popen(cmd_stt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
+    t2 = threading.Thread(target=stream_output, args=(p2, "RealtimeSTT", COLOR_CPP), daemon=True)
     t2.start()
     procs.append(p2)
 
