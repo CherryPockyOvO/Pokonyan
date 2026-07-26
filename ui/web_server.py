@@ -96,8 +96,10 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
     <section class="card">
       <div class="label">Sound Classification (YAMNet Fusion)</div>
       <div id="event" class="value">-</div>
-      <div class="label">Whisper Transcript (C++ GPU STT)</div>
+      <div class="label">Last Completed Sentence (Final STT)</div>
       <div id="transcript" class="value" style="color:#7ee787">-</div>
+      <div class="label">Realtime Live Recognition (Streaming Draft)</div>
+      <div id="live_transcript" class="value" style="color:#e3b341">-</div>
       <div id="error"></div>
     </section>
   </div>
@@ -139,6 +141,7 @@ async function poll(){
     }
 
     show('transcript', a.text || '-');
+    show('live_transcript', a.live_text || '-');
     show('error', [v.error, a.error, m.error].filter(Boolean).join('\\n'));
   }catch(e){show('error', String(e))}
 }
@@ -341,10 +344,11 @@ class StreamingHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(body.decode("utf-8")) if body else {}
                 text = data.get("text", "")
+                is_live = bool(data.get("live", False))
                 callback = type(self).transcribe_text_callback
                 if callback is not None:
-                    callback(text)
-                self._json(200, {"ok": True, "text": text})
+                    callback(text, is_live)
+                self._json(200, {"ok": True, "text": text, "live": is_live})
             except Exception as e:
                 self._json(400, {"error": str(e)})
             return

@@ -136,6 +136,7 @@ def main():
         return vision_ready and motor_ready
 
     latest_transcript = ""
+    latest_live_transcript = ""
     latest_audio_event = ""
     latest_audio_score = 0.0
     latest_audio_time = ""
@@ -154,21 +155,27 @@ def main():
             else:
                 print("[Top] Mission ignored: vision or Arduino is not ready")
 
-    def transcribe_text(text):
-        nonlocal latest_transcript
-        latest_transcript = text
-        print(f"[Top <- C++ GPU Audio Client] Received transcript: '{text}'")
+    def transcribe_text(text, is_live=False):
+        nonlocal latest_transcript, latest_live_transcript
+        if is_live:
+            latest_live_transcript = text
+            print(f"[Top <- Realtime STT Draft] '{text}'")
+        else:
+            latest_transcript = text
+            latest_live_transcript = ""
+            print(f"[Top <- Realtime STT Final] '{text}'")
+
         text_lower = text.lower().strip()
 
-        # 1. 說 "what can I say" -> 切換為 MANUAL 手動模式
+        # 1. 說 "what can I say" -> 切換為 MANUAL 手動模式 (實時即時判定)
         if "what can i say" in text_lower or "manual" in text_lower:
             manager.set_mode("MANUAL")
-            print("[Top] 🎤 語音指令: 成功切換為 🎮 [MANUAL 手動模式]")
+            print("[Top] 🎤 實時語音指令: 成功切換為 🎮 [MANUAL 手動模式]")
 
-        # 2. 說 "man" -> 切換為 AUTO 自動巡航模式並啟動任務
+        # 2. 說 "man" -> 切換為 AUTO 自動巡航模式並啟動任務 (實時即時判定)
         elif any(k in text_lower for k in ["man", "alarm", "start", "find", "shoe", "seek", "auto"]):
             manager.set_mode("AUTO")
-            print("[Top] 🎤 語音指令: 成功切換為 🤖 [AUTO 自動巡航模式]")
+            print("[Top] 🎤 實時語音指令: 成功切換為 🤖 [AUTO 自動巡航模式]")
             if system_ready():
                 accepted = manager.trigger_alarm("alarm", 1.0)
                 print(f"[Top] 巡航尋物任務啟動: {accepted}")
@@ -184,6 +191,8 @@ def main():
         audio_stat = {} if audio is None else audio.get_status()
         if latest_transcript:
             audio_stat["text"] = latest_transcript
+        if latest_live_transcript:
+            audio_stat["live_text"] = latest_live_transcript
         if latest_audio_event:
             audio_stat["event"] = latest_audio_event
             audio_stat["event_score"] = latest_audio_score

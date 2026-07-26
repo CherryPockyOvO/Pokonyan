@@ -37,18 +37,18 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-def send_transcript_to_pi(pi_host, port, text):
+def send_transcript_to_pi(pi_host, port, text, is_live=False):
     url = f"http://{pi_host}:{port}/transcribe_text"
-    payload = json.dumps({"text": text}).encode("utf-8")
+    payload = json.dumps({"text": text, "live": is_live}).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, headers={"Content-Type": "application/json"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            print(f"[STT -> Pi {pi_host}] Sent: '{text}'")
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if not is_live:
+                print(f"[STT -> Pi {pi_host}] Sent Final Sentence: '{text}'")
             return True
     except Exception as e:
-        print(f"[STT -> Pi {pi_host}] Failed to send transcript: {e}")
         return False
 
 def main():
@@ -61,20 +61,29 @@ def main():
     args = parser.parse_args()
 
     sentence_count = 0
+    last_live_text = ""
+
+    def text_detected(text):
+        nonlocal last_live_text
+        text = text.strip()
+        if text and text != last_live_text:
+            last_live_text = text
+            send_transcript_to_pi(args.pi_host, args.port, text, is_live=True)
 
     def process_text(text):
-        nonlocal sentence_count
+        nonlocal sentence_count, last_live_text
         text = text.strip()
         if not text:
             return
 
         sentence_count += 1
+        last_live_text = ""
         # Alternate color between Cyan and Yellow for completed sentences
         color = Fore.CYAN if sentence_count % 2 == 1 else Fore.YELLOW
         print(f"{color}[Completed Sentence #{sentence_count}] {text}{Style.RESET_ALL}")
         
         # Push 100% completed sentence to Raspberry Pi Web UI & top.py
-        send_transcript_to_pi(args.pi_host, args.port, text)
+        send_transcript_to_pi(args.pi_host, args.port, text, is_live=False)
 
     recorder_config = {
         'model': args.model,
@@ -84,6 +93,7 @@ def main():
         'compute_type': 'float16',
         'enable_realtime_transcription': True,
         'realtime_processing_pause': 0.15,
+        'on_realtime_transcription_update': text_detected,
         'post_speech_silence_duration': 0.6,
         'min_length_of_recording': 0.5,
         'spinner': False,
