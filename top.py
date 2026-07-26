@@ -150,13 +150,22 @@ def main():
         nonlocal latest_transcript
         latest_transcript = text
         print(f"[Top <- C++ GPU Audio Client] Received transcript: '{text}'")
-        text_lower = text.lower()
-        if any(k in text_lower for k in ["alarm", "start", "find", "shoe", "seek"]):
+        text_lower = text.lower().strip()
+
+        # 1. 說 "what can I say" -> 切換為 MANUAL 手動模式
+        if "what can i say" in text_lower or "manual" in text_lower:
+            manager.set_mode("MANUAL")
+            print("[Top] 🎤 語音指令: 成功切換為 🎮 [MANUAL 手動模式]")
+
+        # 2. 說 "man" -> 切換為 AUTO 自動巡航模式並啟動任務
+        elif any(k in text_lower for k in ["man", "alarm", "start", "find", "shoe", "seek", "auto"]):
+            manager.set_mode("AUTO")
+            print("[Top] 🎤 語音指令: 成功切換為 🤖 [AUTO 自動巡航模式]")
             if system_ready():
                 accepted = manager.trigger_alarm("alarm", 1.0)
-                print(f"[Top] Voice command triggered mission: {accepted}")
+                print(f"[Top] 巡航尋物任務啟動: {accepted}")
             else:
-                print("[Top] Voice command ignored: vision or Arduino is not ready")
+                print("[Top] 巡航模式已切換 (等待相機或 Arduino 連接就緒)")
 
     def emergency_stop():
         manager.emergency_stop()
