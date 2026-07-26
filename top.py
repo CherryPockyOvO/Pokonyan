@@ -135,6 +135,7 @@ def main():
         motor_ready = motor is not None and motor.get_status()["ready"]
         return vision_ready and motor_ready
 
+    latest_transcript = ""
     latest_audio_event = ""
     latest_audio_score = 0.0
     latest_audio_time = ""
