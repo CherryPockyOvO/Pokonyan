@@ -84,6 +84,16 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
     </section>
 
     <section class="card">
+      <div class="flex-row" style="margin-bottom:8px;">
+        <div>
+          <div class="label">💥 Bumper Collision (碰撞狀態)</div>
+          <div id="bumper_status" class="value" style="font-weight:bold;">🟢 B0 (NO BUMP 沒撞擊)</div>
+        </div>
+        <div>
+          <div class="label">🔍 Shoe Seeking (拖鞋追蹤狀態)</div>
+          <div id="seeking_status" class="value" style="font-weight:bold;">💤 WANDERING (普通漫遊)</div>
+        </div>
+      </div>
       <div class="flex-row">
         <div><div class="label">Shoe target</div><div id="target" class="value">not seen</div></div>
         <div><div class="label">YOLO FPS</div><div id="yolo_fps" class="value">0.0 FPS</div></div>
@@ -127,6 +137,26 @@ async function poll(){
     show('state', `[${currentMode}] ` + (r.state||'IDLE'));
     show('reason', r.reason||'-');
     show('command', (r.command_left??0) + ' / ' + (r.command_right??0) + ' PWM');
+    
+    const bumperPressed = m.bumper_pressed || false;
+    const bumperBox = document.getElementById('bumper_status');
+    if (bumperPressed) {
+      bumperBox.innerHTML = `<span class="red-alert-banner">💥 B1 (COLLISION 撞擊)</span>`;
+    } else {
+      bumperBox.innerHTML = `<span style="color:#7ee787;font-weight:bold;">🟢 B0 (NO BUMP 沒撞擊)</span>`;
+    }
+
+    const autoState = r.state || 'IDLE';
+    const seekingBox = document.getElementById('seeking_status');
+    if (currentMode !== 'AUTO') {
+      seekingBox.innerHTML = `<span style="color:#8b949e;">🎮 MANUAL MODE (手動控制)</span>`;
+    } else if (autoState === 'TRACKING_SHOE') {
+      seekingBox.innerHTML = `<span class="doorbell-banner">🔍 SEEKING SHOE (尋找鞋子中)</span>`;
+    } else if (autoState === 'HIT_SHOE') {
+      seekingBox.innerHTML = `<span class="red-alert-banner">👟 HIT SHOE (已撞到鞋子, 停留5秒)</span>`;
+    } else {
+      seekingBox.innerHTML = `<span style="color:#58a6ff;">💤 WANDERING (普通漫遊)</span>`;
+    }
     
     const t=v.target;
     show('target', t ? 'x=' + t.centre_x.toFixed(2) + ', h=' + t.height_ratio.toFixed(2) : 'not seen');
