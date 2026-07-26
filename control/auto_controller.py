@@ -60,6 +60,8 @@ class AutoController:
         with self.lock:
             self.alert = event
             self.alert_score = score
+            self.scan_steps = 0
+            self.scan_state = "IDLE"
             self._transition("TRACKING_SHOE", now, f"Audio event triggered shoe tracking mission: {event}")
             return True
 
@@ -127,18 +129,45 @@ class AutoController:
                     self.command = (0, 0)
                     return self.command
 
-                # B) 追蹤拖鞋：視野出現鞋子即直接追蹤（遠處平滑組合鍵，近處小幅度步進原地轉彎）
+                # B) 發現鞋子特判：在任何時刻（含 6 次旋轉掃描期間）只要發現鞋子，立刻中止旋轉掃描，直接追蹤！
                 if target is not None:
+                    self.scan_steps = 0
+                    self.scan_state = "DONE"
                     cmd, track_reason = self.shoe_tracker.tick(target, distance)
                     self.command = cmd
                     self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
-                else:
-                    # 追蹤中暫時沒看到鞋子：執行適當的原地旋轉與組合鍵尋找 (直行上限限制為 150)
-                    cmd, search_reason = self.pet_wander.tick(distance, max_straight_speed=150)
-                    self.command = cmd
-                    self.reason = f"[Seeking Shoe (150 Max)] {search_reason}"
-                    return self.command
+
+                # C) 沒看到鞋子，且尚未完成 6 次步進旋轉掃描：執行 6 次步進旋轉（每次轉 0.15s -> 原地停止 0.8s 讀幀）
+                if self.scan_steps < 6 and self.scan_state != "DONE":
+                    if self.scan_state == "SPINNING":
+                        if now < self.scan_until:
+                            return self.scan_cmd, self.reason
+                        else:
+                            self.scan_state = "PAUSING"
+                            self.pause_until = now + 0.8  # 轉動後停止 0.8 秒
+                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                            return (0, 0), self.reason
+
+                    if self.scan_state == "PAUSING":
+                        if now < self.pause_until:
+                            return (0, 0), f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                        else:
+                            self.scan_state = "IDLE"
+
+                    # 啟動下一次步進旋轉 (第 1 ~ 6 次)
+                    self.scan_steps += 1
+                    self.scan_state = "SPINNING"
+                    self.scan_cmd = (-240, 240)
+                    self.scan_until = now + 0.15
+                    self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6: Spinning (-240, 240) 0.15s -> Will pause 0.8s"
+                    return self.scan_cmd, self.reason
+
+                # D) 6 次步進旋轉掃描完成仍未發現鞋子：開始漫遊尋找鞋子 (直行上限 150)
+                cmd, search_reason = self.pet_wander.tick(distance, max_straight_speed=150)
+                self.command = cmd
+                self.reason = f"[6 Scan Steps Complete -> Wandering Search (150 Max)] {search_reason}"
+                return self.command
 
             # -------------------------------------------------------------
             # 3. 無聲響任務：普通 IDLE 漫遊 (執行 65cm 超聲波自動避障)
