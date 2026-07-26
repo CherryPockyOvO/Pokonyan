@@ -142,16 +142,20 @@ class AutoController:
                 if self.scan_steps < 6 and self.scan_state != "DONE":
                     if self.scan_state == "SPINNING":
                         if now < self.scan_until:
-                            return self.scan_cmd, self.reason
+                            self.command = self.scan_cmd
+                            return self.command
                         else:
                             self.scan_state = "PAUSING"
                             self.pause_until = now + 0.8  # 轉動後停止 0.8 秒
+                            self.command = (0, 0)
                             self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
-                            return (0, 0), self.reason
+                            return self.command
 
                     if self.scan_state == "PAUSING":
                         if now < self.pause_until:
-                            return (0, 0), f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                            self.command = (0, 0)
+                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                            return self.command
                         else:
                             self.scan_state = "IDLE"
 
@@ -160,8 +164,9 @@ class AutoController:
                     self.scan_state = "SPINNING"
                     self.scan_cmd = (-240, 240)
                     self.scan_until = now + 0.15
+                    self.command = self.scan_cmd
                     self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6: Spinning (-240, 240) 0.15s -> Will pause 0.8s"
-                    return self.scan_cmd, self.reason
+                    return self.command
 
                 # D) 6 次步進旋轉掃描完成仍未發現鞋子：開始漫遊尋找鞋子 (直行上限 150)
                 cmd, search_reason = self.pet_wander.tick(distance, max_straight_speed=150)
