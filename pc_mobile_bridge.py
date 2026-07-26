@@ -19,6 +19,7 @@ import hashlib
 import datetime
 import argparse
 import threading
+import urllib.request
 import numpy as np
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
