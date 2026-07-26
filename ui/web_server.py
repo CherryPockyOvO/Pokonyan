@@ -69,11 +69,6 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
         <button id="btn-auto" class="btn btn-mode active" onclick="setMode('AUTO')">🤖 AUTO Mode</button>
         <button id="btn-manual" class="btn btn-mode" onclick="setMode('MANUAL')">🎮 MANUAL Mode</button>
       </div>
-      <div class="label" style="margin-top:8px;">Shoe Tracking Feature (拖鞋自動追蹤)</div>
-      <div class="mode-btn-group">
-        <button id="btn-shoe-on" class="btn btn-mode active" onclick="setShoeTracking(true)">👟 追蹤開啟 ON</button>
-        <button id="btn-shoe-off" class="btn btn-mode" onclick="setShoeTracking(false)">🚫 追蹤關閉 OFF</button>
-      </div>
       <div class="wasd-pad">
         <button class="btn btn-wasd" id="key-wa" onclick="sendCmd('WA')">WA ↖</button>
         <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W ↑</button>
@@ -120,18 +115,6 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
 const show=(id,value)=>document.getElementById(id).textContent=value;
 let currentMode = "AUTO";
 
-async function setShoeTracking(enabled){
-  try{
-    await fetch('/set_shoe_tracking',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({enabled:enabled})
-    });
-    document.getElementById('btn-shoe-on').classList.toggle('active', enabled);
-    document.getElementById('btn-shoe-off').classList.toggle('active', !enabled);
-  }catch(e){console.error(e);}
-}
-
 async function poll(){
   try{
     const s=await (await fetch('/status',{cache:'no-store'})).json();
@@ -140,10 +123,6 @@ async function poll(){
     
     document.getElementById('btn-auto').classList.toggle('active', currentMode === 'AUTO');
     document.getElementById('btn-manual').classList.toggle('active', currentMode === 'MANUAL');
-    if (r.shoe_tracking_enabled !== undefined) {
-      document.getElementById('btn-shoe-on').classList.toggle('active', r.shoe_tracking_enabled);
-      document.getElementById('btn-shoe-off').classList.toggle('active', !r.shoe_tracking_enabled);
-    }
     
     show('state', `[${currentMode}] ` + (r.state||'IDLE'));
     show('reason', r.reason||'-');
@@ -344,20 +323,6 @@ class StreamingHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
             return
 
-        if path == "/set_shoe_tracking":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            try:
-                data = json.loads(body.decode("utf-8")) if body else {}
-                enabled = bool(data.get("enabled", True))
-                callback = type(self).set_shoe_tracking_callback
-                if callback is not None:
-                    callback(enabled)
-                self._json(200, {"ok": True, "enabled": enabled})
-            except Exception as e:
-                self._json(400, {"error": str(e)})
-            return
-
         if path == "/manual_command":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
@@ -417,7 +382,6 @@ class WebStreamServer:
         robot_status_provider=None,
         emergency_stop=None,
         set_mode_callback=None,
-        set_shoe_tracking_callback=None,
         manual_cmd_callback=None,
         audio_event_callback=None,
         transcribe_text_callback=None,
@@ -429,7 +393,6 @@ class WebStreamServer:
         StreamingHandler.status_provider = robot_status_provider
         StreamingHandler.emergency_stop = emergency_stop
         StreamingHandler.set_mode_callback = set_mode_callback
-        StreamingHandler.set_shoe_tracking_callback = set_shoe_tracking_callback
         StreamingHandler.manual_cmd_callback = manual_cmd_callback
         StreamingHandler.audio_event_callback = audio_event_callback
         StreamingHandler.transcribe_text_callback = transcribe_text_callback

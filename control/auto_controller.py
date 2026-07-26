@@ -29,8 +29,6 @@ class AutoController:
         self.rotate_step_seconds = 0.45
         self.scan_pause_seconds = 2.0
         self.forward_seconds = 10.0
-        self.ever_saw_large_shoe = False
-        self.shoe_tracking_enabled = True  # 是否啟動拖鞋追蹤功能（預設開啟）
 
         # 1. 寵物自由漫遊與 65cm 超聲波自動避障控制器
         self.pet_wander = PetWanderController(
@@ -47,20 +45,6 @@ class AutoController:
             full_shoe_height_ratio=0.35,
         )
 
-    def set_shoe_tracking(self, enabled):
-        with self.lock:
-            self.shoe_tracking_enabled = bool(enabled)
-            print(f"[AutoController] 👟 拖鞋追蹤功能開關切換 -> enabled={self.shoe_tracking_enabled}")
-            # 切換開關時重置為乾淨 IDLE 狀態，清空先決條件位，準備接收下一次聲響任務
-            self.alert = ""
-            self.alert_score = 0.0
-            self.ever_saw_large_shoe = False
-            self.pet_wander.reset()
-            self.shoe_tracker.reset()
-            if self.state != "IDLE":
-                self._transition("IDLE", time.monotonic(), f"Shoe tracking switch set to {self.shoe_tracking_enabled} -> Reset to IDLE")
-            return self.shoe_tracking_enabled
-
     def _transition(self, state, now, reason):
         if state != self.state:
             print(f"[AutoController] {self.state} -> {state}: {reason}")
@@ -69,18 +53,13 @@ class AutoController:
             if state == "IDLE":
                 self.pet_wander.reset()
                 self.shoe_tracker.reset()
-                self.ever_saw_large_shoe = False
         self.reason = reason
 
     def trigger(self, event, score):
         now = time.monotonic()
         with self.lock:
-            if not self.shoe_tracking_enabled:
-                print(f"[AutoController] 👟 收到聲響 '{event}'，但用戶已關閉拖鞋追蹤功能 -> 忽略追蹤任務")
-                return False
             self.alert = event
             self.alert_score = score
-            self.ever_saw_large_shoe = False  # 觸發新聲響任務時重置先決條件標誌
             self._transition("TRACKING_SHOE", now, f"Audio event triggered shoe tracking mission: {event}")
             return True
 
@@ -90,7 +69,6 @@ class AutoController:
             self.command = (0, 0)
             self.pet_wander.reset()
             self.shoe_tracker.reset()
-            self.ever_saw_large_shoe = False
 
     def reset(self):
         with self.lock:
@@ -98,7 +76,6 @@ class AutoController:
             self.alert_score = 0.0
             self.scan_steps = 0
             self.command = (0, 0)
-            self.ever_saw_large_shoe = False
             self._transition("IDLE", time.monotonic(), "reset to IDLE (AUTO mode)")
             self.pet_wander.reset()
             self.shoe_tracker.reset()
@@ -123,7 +100,7 @@ class AutoController:
             bumper_pressed = motor_status.get("bumper_pressed", False)  # True if B1, False if B0
 
             # -------------------------------------------------------------
-            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 5 秒，之後恢復 AUTO 模式與 NORMAL 狀態
+            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 5 秒
             # -------------------------------------------------------------
             if self.state == "HIT_SHOE":
                 if elapsed < 5.0:
@@ -132,56 +109,43 @@ class AutoController:
                     self.reason = f"👟 Valid shoe hit! Holding position 5s ({remaining:.1f}s remaining)..."
                     return self.command
                 else:
-                    # 5 秒時間到：重置回 IDLE 隨機漫遊 (AUTO 模式)，清除警報，並自動將追蹤功能切換為 OFF 關閉
+                    # 5 秒時間到：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL
                     self.alert = ""
                     self.alert_score = 0.0
-                    self.ever_saw_large_shoe = False
-                    self.shoe_tracking_enabled = False  # 撞鞋任務完成，網頁按鈕自動切換為 OFF 停止追蹤
-                    self._transition("IDLE", now, "5s shoe hold complete -> Resuming ordinary AUTO wander & turning shoe tracking OFF")
+                    self._transition("IDLE", now, "5s shoe hold complete -> Resuming ordinary AUTO wander")
                     self.pet_wander.reset()
                     self.shoe_tracker.reset()
                     return (0, 0)
 
             # -------------------------------------------------------------
-            # 2. 拖鞋追蹤與避障屏蔽邏輯（僅在【追蹤功能開啟 self.shoe_tracking_enabled == True】且有聲響任務時執行）
+            # 2. 聲響觸發後的拖鞋追蹤狀態 (TRACKING_SHOE)
             # -------------------------------------------------------------
-            is_tracking_active = self.shoe_tracking_enabled and (self.state == "TRACKING_SHOE" or bool(self.alert))
-
-            if is_tracking_active:
-                # A) 檢測鏡頭中是否出現過大鞋子（先決條件標誌位）
-                if target is not None:
-                    h_ratio = target.get("height_ratio", 0.0)
-                    w_ratio = target.get("width_ratio", 0.0)
-                    if h_ratio >= 0.20 or (w_ratio * h_ratio) >= 0.05:
-                        if not self.ever_saw_large_shoe:
-                            print("[AutoController] 🎯 Large shoe detected in camera frame! Prerequisite fulfilled.")
-                            self.ever_saw_large_shoe = True
-
-                # B) 撞擊有效性判斷：必須滿足【曾經出現過大鞋子 (ever_saw_large_shoe == True)】，碰撞 B1 才有效！
-                if self.ever_saw_large_shoe and bumper_pressed:
-                    self._transition("HIT_SHOE", now, "👟 Shoe collision valid! (Prerequisite large shoe seen & B1 bumper pressed) -> Holding 5s.")
+            if self.state == "TRACKING_SHOE":
+                # A) 碰撞檢測：撞擊鞋子 (觸發微動開關 B1) 即進入 5 秒停留
+                if bumper_pressed:
+                    self._transition("HIT_SHOE", now, "👟 Shoe collision! (B1 bumper pressed) -> Holding 5s.")
                     self.command = (0, 0)
                     return self.command
 
-                # C) 專注衝刺追蹤拖鞋（關閉避障，直到撞擊目標 B1）：
+                # B) 追蹤拖鞋：視野出現鞋子即直接追蹤（遠處平滑組合鍵，近處小幅度步進原地轉彎）
                 if target is not None:
                     cmd, track_reason = self.shoe_tracker.tick(target, distance)
                     self.command = cmd
-                    self.reason = f"[No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}] {track_reason}"
+                    self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
                 else:
+                    # 追蹤中暫時沒看到鞋子：保持直向前進尋找 (220, 220)
                     cmd = (220, 220)
                     self.command = cmd
-                    self.reason = f"Seeking target (No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}): Driving forward (220, 220)"
+                    self.reason = "Seeking shoe target: Driving forward (220, 220)"
                     return self.command
 
             # -------------------------------------------------------------
-            # 3. 追蹤關閉 或 無聲響任務：普通 IDLE 漫遊 (默認 65cm 超聲波自動避障)
+            # 3. 無聲響任務：普通 IDLE 漫遊 (執行 65cm 超聲波自動避障)
             # -------------------------------------------------------------
-            self.ever_saw_large_shoe = False
             cmd, wander_reason = self.pet_wander.tick(distance)
             self.command = cmd
-            self.reason = f"[Ordinary Wander | Shoe Tracking OFF] {wander_reason}"
+            self.reason = f"[Ordinary Wander] {wander_reason}"
             return self.command
 
     def get_status(self):

@@ -51,21 +51,11 @@ class RobotDualModeManager:
                 self.mode = mode
                 if mode == "MANUAL":
                     self.auto_ctrl.emergency_stop()
-                    self.auto_ctrl.shoe_tracking_enabled = False  # 切換為手動模式時，網頁拖鞋追蹤按鈕自動跳轉為 OFF 關閉
                     self.manual_ctrl.handle_command("B")
                 else:
                     self.manual_ctrl.emergency_stop()
                     self.auto_ctrl.reset()
             return True
-
-    def set_shoe_tracking(self, enabled):
-        with self.lock:
-            res = self.auto_ctrl.set_shoe_tracking(enabled)
-            if enabled and self.mode != "AUTO":
-                print("[Top] 👟 用戶開啟拖鞋追蹤 -> 自動將機器人模式切換為 🤖 AUTO 模式")
-                self.mode = "AUTO"
-                self.manual_ctrl.emergency_stop()
-            return res
 
     def handle_manual_command(self, cmd):
         if self.mode != "MANUAL":
@@ -94,7 +84,6 @@ class RobotDualModeManager:
         with self.lock:
             status = {
                 "mode": self.mode,
-                "shoe_tracking_enabled": self.auto_ctrl.shoe_tracking_enabled,
             }
             if self.mode == "MANUAL":
                 man_stat = self.manual_ctrl.get_status()
@@ -280,7 +269,6 @@ def main():
             robot_status_provider=status,
             emergency_stop=emergency_stop,
             set_mode_callback=manager.set_mode,
-            set_shoe_tracking_callback=manager.set_shoe_tracking,
             manual_cmd_callback=manager.handle_manual_command,
             audio_event_callback=audio_event,
             transcribe_text_callback=transcribe_text,
