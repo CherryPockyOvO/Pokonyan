@@ -132,11 +132,12 @@ class AutoController:
                     self.reason = f"👟 Valid shoe hit! Holding position 5s ({remaining:.1f}s remaining)..."
                     return self.command
                 else:
-                    # 5 秒時間到：重置回 IDLE 隨機漫遊 (AUTO 模式)，並清除警報恢復 NORMAL
+                    # 5 秒時間到：重置回 IDLE 隨機漫遊 (AUTO 模式)，清除警報，並自動將追蹤功能切換為 OFF 關閉
                     self.alert = ""
                     self.alert_score = 0.0
                     self.ever_saw_large_shoe = False
-                    self._transition("IDLE", now, "5s shoe hold complete -> Resuming ordinary AUTO random wander")
+                    self.shoe_tracking_enabled = False  # 撞鞋任務完成，網頁按鈕自動切換為 OFF 停止追蹤
+                    self._transition("IDLE", now, "5s shoe hold complete -> Resuming ordinary AUTO wander & turning shoe tracking OFF")
                     self.pet_wander.reset()
                     self.shoe_tracker.reset()
                     return (0, 0)

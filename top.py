@@ -51,6 +51,7 @@ class RobotDualModeManager:
                 self.mode = mode
                 if mode == "MANUAL":
                     self.auto_ctrl.emergency_stop()
+                    self.auto_ctrl.shoe_tracking_enabled = False  # 切換為手動模式時，網頁拖鞋追蹤按鈕自動跳轉為 OFF 關閉
                     self.manual_ctrl.handle_command("B")
                 else:
                     self.manual_ctrl.emergency_stop()
@@ -93,6 +94,7 @@ class RobotDualModeManager:
         with self.lock:
             status = {
                 "mode": self.mode,
+                "shoe_tracking_enabled": self.auto_ctrl.shoe_tracking_enabled,
             }
             if self.mode == "MANUAL":
                 man_stat = self.manual_ctrl.get_status()
