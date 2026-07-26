@@ -330,6 +330,7 @@ def main():
                 print("[Top] Simulated alarm not started: system not ready")
 
         previous = None
+        last_print_time = 0.0
         while not stopped.wait(0.05):
             if motor is None:
                 continue
@@ -345,7 +346,7 @@ def main():
                     status_category = "NORMAL"
                     alarm_event_name = ""
                     alarm_score = 0.0
-                    print("[Top] 🟢 5秒停留完成，全系統狀態重置恢復 NORMAL！")
+                    print("[Top] 🟢 5秒停留完成，全系統狀態重置恢復 NORMAL！", flush=True)
                     def send_async_reset():
                         for host in ["127.0.0.1", "100.97.77.52", "localhost"]:
                             try:
@@ -372,8 +373,9 @@ def main():
             else:
                 seeking_str = "💤 WANDERING (普通漫遊)"
 
+            now_t = time.time()
             marker = (current["mode"], auto_state, current["reason"], command, bumper_pressed)
-            if marker != previous:
+            if marker != previous or (now_t - last_print_time >= 1.0):
                 print(
                     f"\n======================================================\n"
                     f"[8080 Terminal Status]\n"
@@ -382,9 +384,11 @@ def main():
                     f"  🔍 拖鞋追蹤 (Tracking) : {seeking_str}\n"
                     f"  📝 決策原因 (Reason)   : {current['reason']}\n"
                     f"  ⚙️ 馬達輸出 (Motor PWM): L={command[0]} / R={command[1]}\n"
-                    f"======================================================\n"
+                    f"======================================================\n",
+                    flush=True
                 )
                 previous = marker
+                last_print_time = now_t
     finally:
         emergency_stop()
         if web is not None:
