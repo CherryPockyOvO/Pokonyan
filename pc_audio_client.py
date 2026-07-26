@@ -83,8 +83,8 @@ def main():
     parser.add_argument("--port", type=int, default=8080, help="Raspberry Pi web server port (default: 8080)")
     parser.add_argument("--yamnet", default="model/yamnet.tflite")
     parser.add_argument("--whisper", default="model/ggml-tiny.en.bin")
-    parser.add_argument("--speech-thresh", type=float, default=0.35)
-    parser.add_argument("--event-thresh", type=float, default=0.45)
+    parser.add_argument("--speech-thresh", type=float, default=0.30)
+    parser.add_argument("--event-thresh", type=float, default=0.30)
     args = parser.parse_args()
 
     print(f"[PC Audio] Local PC Audio Node starting...")

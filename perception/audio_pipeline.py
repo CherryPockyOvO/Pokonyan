@@ -114,25 +114,26 @@ def bandpass_filter(audio_data, sample_rate=16000, lowcut=500.0, highcut=4000.0,
 # ===================================================================
 # YAMNet class-index groups (official 521-class AudioSet ontology)
 # ===================================================================
-SPEECH_EVENTS = {
-    "speech": (0, 1, 2, 3),
-}
-
-BELL_EVENTS = {
-    "alarm":       (382, 390, 391, 393, 394),
-    "alarm_clock": (389,),
-    "doorbell":    (349, 350),
-    "bell":        (173, 195, 196, 197, 198, 200, 201),
-    "ring":        (202, 384, 385),
-    "siren":       (395, 396, 397),
-    "laughter":    (16, 17, 18),
+ALL_SOUND_EVENTS = {
+    "speech":      (0, 1, 2, 3),
+    "laughter":    (16, 17, 18, 19),
     "cough":       (45,),
     "snore":       (48,),
     "whistling":   (51,),
-    "music":       (137,),
+    "screaming":   (12, 13),
     "applause":    (57, 58),
     "dog_bark":    (74, 75),
+    "cat_meow":    (81,),
+    "music":       (137, 138),
+    "doorbell":    (349, 350),
+    "bell":        (173, 195, 196, 197, 198, 200, 201),
+    "ring":        (202, 384, 385),
+    "alarm":       (382, 390, 391, 393, 394),
+    "alarm_clock": (389,),
+    "siren":       (395, 396, 397),
 }
+SPEECH_EVENTS = ALL_SOUND_EVENTS
+BELL_EVENTS = ALL_SOUND_EVENTS
 
 
 # ===================================================================
@@ -248,8 +249,8 @@ class YamnetWhisperAudioPipeline:
         chunk_duration=0.25,
         speech_threshold=0.35,
         event_threshold=0.45,
-        trigger_hits=2,
-        event_cooldown_sec=5.0,
+        trigger_hits=1,
+        event_cooldown_sec=0.8,
         max_silence_sec=0.8,
         min_speech_sec=0.5,
         max_speech_sec=10.0,
