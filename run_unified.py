@@ -109,26 +109,29 @@ def main():
     stop_event = threading.Event()
     procs = []
 
-    # Node 1: Raspberry Pi SSH Auto-Login thread
-    pi_cmd = "cd ~/Pokonyan && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio"
-    t1 = threading.Thread(target=run_ssh_paramiko, args=(args.pi_host, args.pi_user, args.pi_pass, pi_cmd, "Pi", COLOR_PI, stop_event), daemon=True)
-    t1.start()
-
-    # Node 2: RealtimeSTT CUDA GPU Speech Client (Dual-Model Refinement: tiny.en + small.en)
-    cmd_stt = [py_exe, os.path.join(BASE_DIR, "pc_stt_client.py"), "--pi-host", args.pi_host]
-    p2 = subprocess.Popen(cmd_stt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
-    t2 = threading.Thread(target=stream_output, args=(p2, "RealtimeSTT", COLOR_CPP), daemon=True)
-    t2.start()
-    procs.append(p2)
-
-    # Node 3: Mobile Mic & Control Bridge Server + Pure YAMNet Classifier
+    # Node 1: Mobile Mic & Control Bridge Server + Pure YAMNet Classifier (Start FIRST)
     cmd_yamnet = [py_exe, os.path.join(BASE_DIR, "pc_mobile_bridge.py"), "--pi-host", args.pi_host]
     p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
     t3 = threading.Thread(target=stream_output, args=(p3, "MobileBridge", COLOR_YAMNET), daemon=True)
     t3.start()
     procs.append(p3)
 
-    print(f"\n✅ All 3 nodes successfully initialized with automatic login! Press Ctrl+C to stop.\n")
+    print(f"\n{COLOR_SYS}⏳ Waiting for iPhone 17 Pro Max microphone connection...{COLOR_RESET}")
+    print(f"👉 Please open {COLOR_SYS}https://100.97.77.52:5000/{COLOR_RESET} on iPhone Safari and tap '開啟 iPhone 麥克風'!\n")
+
+    # Node 2: Raspberry Pi SSH Auto-Login thread
+    pi_cmd = "cd ~/Pokonyan && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio"
+    t1 = threading.Thread(target=run_ssh_paramiko, args=(args.pi_host, args.pi_user, args.pi_pass, pi_cmd, "Pi", COLOR_PI, stop_event), daemon=True)
+    t1.start()
+
+    # Node 3: RealtimeSTT CUDA GPU Speech Client (Dual-Model Refinement: tiny.en + small.en)
+    cmd_stt = [py_exe, os.path.join(BASE_DIR, "pc_stt_client.py"), "--pi-host", args.pi_host]
+    p2 = subprocess.Popen(cmd_stt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
+    t2 = threading.Thread(target=stream_output, args=(p2, "RealtimeSTT", COLOR_CPP), daemon=True)
+    t2.start()
+    procs.append(p2)
+
+    print(f"\n✅ All nodes initialized! System listening on iPhone microphone feed. Press Ctrl+C to stop.\n")
 
     try:
         while True:

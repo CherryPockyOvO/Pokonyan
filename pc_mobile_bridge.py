@@ -61,15 +61,23 @@ ALL_CLASS_NAMES = {**DOORBELL_CLASSES, **ALARM_CLASSES, **GENERAL_CLASSES}
 
 # Global State
 audio_pcm_queue = []
+stt_bytes_queue = []
+phone_connected_event = threading.Event()
 PI_HOST = "100.80.242.72"
 PI_PORT = 8080
+
+def is_phone_connected():
+    return phone_connected_event.is_set()
+
+def wait_for_phone_connection(timeout=None):
+    return phone_connected_event.wait(timeout=timeout)
 
 MOBILE_HTML = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>📱 Pokonyan 手機麥克風 & 終端控制台</title>
+<title>📱 Pokonyan iPhone / 手機麥克風 & 終端控制台</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
@@ -97,13 +105,13 @@ body { background: #0d1117; color: #c9d1d9; padding: 12px; font-size: 14px; }
 <body>
 
 <div class="header">
-  <h1>📱 Pokonyan 手機麥克風 & 控制台</h1>
+  <h1>📱 iPhone / 手機麥克風 & Pokonyan 控制台</h1>
 </div>
 
 <!-- 🎙️ 手機麥克風開關 -->
 <div class="card">
-  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟手機麥克風 (Stream Mic to PC)</button>
-  <div id="mic-status" style="font-size: 12px; color: #8b949e; margin-top: 6px; text-align: center;">點擊按鈕授權麥克風，即可將手機當作電腦麥克風使用</div>
+  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)</button>
+  <div id="mic-status" style="font-size: 12px; color: #8b949e; margin-top: 6px; text-align: center;">點擊按鈕授權麥克風，即可將 iPhone 當作電腦麥克風使用</div>
 </div>
 
 <!-- 🚨 聲音識別與門鈴標誌位 -->
@@ -159,7 +167,7 @@ async function toggleMicrophone() {
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     if (audioContext) audioContext.close();
     isMicStreaming = false;
-    btn.textContent = '🎙️ 開啟手機麥克風 (Stream Mic to PC)';
+    btn.textContent = '🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)';
     btn.classList.remove('btn-mic-on');
     status.textContent = '麥克風已停止串流';
     status.style.color = '#8b949e';
@@ -197,12 +205,12 @@ async function toggleMicrophone() {
       scriptNode.connect(audioContext.destination);
 
       isMicStreaming = true;
-      btn.textContent = '🛑 手機麥克風收音中 (點擊停止)';
+      btn.textContent = '🛑 iPhone 麥克風收音中 (點擊停止)';
       btn.classList.add('btn-mic-on');
-      status.textContent = '🟢 手機麥克風正在向電腦實時串流音訊中...';
+      status.textContent = '🟢 iPhone 麥克風正在向電腦實時串流音訊中...';
       status.style.color = '#7ee787';
     } catch (err) {
-      alert('無法存取手機麥克風：' + err.message);
+      alert('無法存取 iPhone 麥克風：' + err.message);
       status.textContent = '存取麥克風失敗：' + err.message;
       status.style.color = '#da3633';
     }
@@ -308,9 +316,15 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             pcm_bytes = self.rfile.read(content_length)
             if pcm_bytes:
+                if not phone_connected_event.is_set():
+                    phone_connected_event.set()
+                    print("\n[MobileBridge] 🎉 ✅ iPhone Microphone Connected & Authorized!")
+                    print("[MobileBridge] 🚀 Starting YAMNet Sound Classifier & CUDA RealtimeSTT Pipelines...\n")
+
                 pcm16 = np.frombuffer(pcm_bytes, dtype=np.int16)
                 float32_samples = pcm16.astype(np.float32) / 32768.0
                 audio_pcm_queue.append(float32_samples)
+                stt_bytes_queue.append(pcm_bytes)
             
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -354,7 +368,59 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
 
         self.send_error(404)
 
+def run_mobile_stt(pi_host, pi_port):
+    phone_connected_event.wait()
+    print(f"[Mobile Mic STT] Initializing RealtimeSTT CUDA GPU models (tiny.en + small.en)...")
+    try:
+        from pc_stt_client import send_transcript_to_pi
+        from RealtimeSTT import AudioToTextRecorder
+
+        sentence_count = 0
+        last_live_text = ""
+
+        def text_detected(text):
+            nonlocal last_live_text
+            text = text.strip()
+            if text and text != last_live_text:
+                last_live_text = text
+                send_transcript_to_pi(pi_host, pi_port, text, is_live=True)
+
+        def process_text(text):
+            nonlocal sentence_count, last_live_text
+            text = text.strip()
+            if not text:
+                return
+            sentence_count += 1
+            last_live_text = ""
+            print(f"[Mobile STT Final #{sentence_count}] {text}")
+            send_transcript_to_pi(pi_host, pi_port, text, is_live=False)
+
+        recorder_config = {
+            'model': 'small.en',
+            'realtime_model_type': 'tiny.en',
+            'language': 'en',
+            'device': 'cuda',
+            'compute_type': 'float16',
+            'enable_realtime_transcription': True,
+            'realtime_processing_pause': 0.15,
+            'on_realtime_transcription_update': text_detected,
+            'post_speech_silence_duration': 0.6,
+            'min_length_of_recording': 0.5,
+            'spinner': False,
+        }
+        recorder = AudioToTextRecorder(**recorder_config)
+        print(f"[Mobile Mic STT] CUDA GPU STT listening on iPhone audio feed!")
+
+        while True:
+            time.sleep(0.02)
+            while stt_bytes_queue:
+                raw_bytes = stt_bytes_queue.pop(0)
+                recorder.feed_audio(raw_bytes)
+    except Exception as e:
+        print(f"[Mobile Mic STT Warning] {e}")
+
 def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
+    phone_connected_event.wait()
     print(f"[Mobile Mic YAMNet] Initializing YAMNet TFLite interpreter...")
     interp = Interpreter(model_path=model_path)
     input_details = interp.get_input_details()
