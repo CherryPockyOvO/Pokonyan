@@ -366,20 +366,11 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                     pass
                 return
 
-        # Status JSON with real-time port 5000 audio status sync
+        # Windows Local Status JSON (100% Instant, 0ms Latency)
         if self.path == "/status":
-            robot_data = {"mode": "AUTO"}
-            url = f"http://{PI_HOST}:{PI_PORT}/status"
-            try:
-                with urllib.request.urlopen(url, timeout=1.0) as resp:
-                    res_json = json.loads(resp.read().decode("utf-8"))
-                    robot_data = res_json.get("robot", robot_data)
-            except Exception:
-                pass
-
             combined_status = {
                 "audio": latest_audio_status,
-                "robot": robot_data
+                "robot": {"mode": "AUTO"}
             }
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
