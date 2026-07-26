@@ -14,73 +14,93 @@ HTML_PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Shoe Robot Dual-Mode Control</title>
 <style>
-body{margin:0;background:#0d1117;color:#c9d1d9;font:16px system-ui,sans-serif}
-main{max-width:960px;margin:auto;padding:18px}
-h1{font-size:24px;color:#58a6ff;margin-bottom:14px}
-img{width:100%;background:#000;border:1px solid #30363d;border-radius:8px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
-.label{color:#8b949e;font-size:13px}.value{font-size:20px;margin:4px 0 10px;font-weight:600}
-#state{color:#7ee787}#mode-val{color:#58a6ff}#error{color:#ff7b72;white-space:pre-wrap;margin-top:10px}
-.mode-btn-group{display:flex;gap:10px;margin-bottom:14px}
-.btn{border:0;border-radius:6px;padding:10px 16px;font-weight:bold;cursor:pointer;transition:all 0.2s}
-.btn-mode{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+body{margin:0;background:#0d1117;color:#c9d1d9;font:15px system-ui,sans-serif;height:100vh;overflow:hidden}
+main{max-width:1440px;margin:auto;padding:10px 16px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column}
+h1{font-size:20px;color:#58a6ff;margin:0 0 10px 0;display:flex;align-items:center;justify-content:space-between}
+.dashboard{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;flex:1;min-height:0}
+.left-col,.right-col{display:flex;flex-direction:column;gap:10px;min-height:0}
+img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px solid #30363d;border-radius:8px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px}
+.label{color:#8b949e;font-size:12px}.value{font-size:17px;margin:2px 0 6px;font-weight:600}
+#state{color:#7ee787}#mode-val{color:#58a6ff}#error{color:#ff7b72;white-space:pre-wrap;margin-top:6px;font-size:12px}
+.mode-btn-group{display:flex;gap:8px;margin-bottom:8px}
+.btn{border:0;border-radius:6px;padding:8px 14px;font-weight:bold;cursor:pointer;transition:all 0.2s}
+.btn-mode{background:#21262d;color:#c9d1d9;border:1px solid #30363d;flex:1}
 .btn-mode.active{background:#238636;color:white;border-color:#2ea043}
-.btn-stop{background:#da3633;color:white;width:100%;padding:14px;font-size:16px;margin-top:10px}
+.btn-stop{background:#da3633;color:white;width:100%;padding:10px;font-size:14px;margin-top:6px}
 .btn-stop:hover{background:#f85149}
-.wasd-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:260px;margin:12px auto}
-.btn-wasd{background:#21262d;color:white;font-size:18px;padding:16px;border:1px solid #30363d;border-radius:6px}
+.wasd-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:240px;margin:6px auto}
+.btn-wasd{background:#21262d;color:white;font-size:15px;padding:10px;border:1px solid #30363d;border-radius:6px}
 .btn-wasd:active,.btn-wasd.active{background:#1f6feb;border-color:#388bfd}
 .btn-brake{background:#8b949e;color:#0d1117}
 .btn-brake:active,.btn-brake.active{background:#ff7b72;color:white}
-.wasd-hint{font-size:12px;color:#8b949e;text-align:center;margin-top:8px}
+.wasd-hint{font-size:11px;color:#8b949e;text-align:center;margin-top:4px}
+.red-alert-banner{background:#da3633;color:#ffffff;padding:3px 8px;border-radius:4px;font-weight:bold;display:inline-block;animation:alert-pulse 0.8s infinite alternate}
+@keyframes alert-pulse{from{opacity:0.8;transform:scale(0.98)}to{opacity:1;transform:scale(1.02)}}
+.flex-row{display:flex;gap:12px;justify-content:space-between}
+.flex-row > div{flex:1}
 </style>
 </head>
 <body><main>
-<h1>🤖 Raspberry Pi 5 Shoe Robot Control</h1>
-<img src="/video_feed" alt="YOLO camera stream">
+<h1>
+  <span>🤖 Raspberry Pi 5 Pokonyan Control</span>
+  <button class="btn btn-stop" style="width:auto;padding:6px 14px;margin:0" onclick="emergencyStop()">🚨 STOP</button>
+</h1>
 
-<div class="grid">
-  <section class="card">
-    <div class="label">Control Mode</div>
-    <div class="mode-btn-group">
-      <button id="btn-auto" class="btn btn-mode active" onclick="setMode('AUTO')">🤖 AUTO Mode</button>
-      <button id="btn-manual" class="btn btn-mode" onclick="setMode('MANUAL')">🎮 MANUAL Mode</button>
-    </div>
-    <div class="label">Current Status</div><div id="state" class="value">STARTING</div>
-    <div class="label">Decision / Reason</div><div id="reason">-</div>
-    <div class="label">Motor PWM / Direction</div><div id="command">0 / 0</div>
-  </section>
+<div class="dashboard">
+  <!-- 👈 Left Column: Camera Feed & Status -->
+  <div class="left-col">
+    <img src="/video_feed" alt="YOLO camera stream">
+    <section class="card">
+      <div class="flex-row">
+        <div><div class="label">Current Status</div><div id="state" class="value">STARTING</div></div>
+        <div><div class="label">Decision / Reason</div><div id="reason" class="value">-</div></div>
+        <div><div class="label">Motor PWM (L/R)</div><div id="command" class="value">0 / 0</div></div>
+      </div>
+    </section>
+  </div>
 
-  <section class="card">
-    <div class="label">🎮 MANUAL WASD Control (8-Direction Keyboard / Touch)</div>
-    <div class="wasd-pad">
-      <button class="btn btn-wasd" id="key-wa" onclick="sendCmd('WA')">WA ↖</button>
-      <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W ↑</button>
-      <button class="btn btn-wasd" id="key-wd" onclick="sendCmd('WD')">WD ↗</button>
-      <button class="btn btn-wasd" id="key-a" onclick="sendCmd('A')">A ←</button>
-      <button class="btn btn-wasd btn-brake" id="key-b" onclick="sendCmd('B')">B (Brake)</button>
-      <button class="btn btn-wasd" id="key-d" onclick="sendCmd('D')">D →</button>
-      <button class="btn btn-wasd" id="key-sa" onclick="sendCmd('SA')">SA ↙</button>
-      <button class="btn btn-wasd" id="key-s" onclick="sendCmd('S')">S ↓</button>
-      <button class="btn btn-wasd" id="key-sd" onclick="sendCmd('SD')">SD ↘</button>
-    </div>
-    <div class="wasd-hint">Keyboard: W (Forward), S (Back), A (Left), D (Right), WD/WA/SD/SA (Diagonals), B/Space (Brake)</div>
-  </section>
+  <!-- 👉 Right Column: Mode Controls, WASD, Hardware Data & Audio Fusion -->
+  <div class="right-col">
+    <section class="card">
+      <div class="label">Control Mode</div>
+      <div class="mode-btn-group">
+        <button id="btn-auto" class="btn btn-mode active" onclick="setMode('AUTO')">🤖 AUTO Mode</button>
+        <button id="btn-manual" class="btn btn-mode" onclick="setMode('MANUAL')">🎮 MANUAL Mode</button>
+      </div>
+      <div class="wasd-pad">
+        <button class="btn btn-wasd" id="key-wa" onclick="sendCmd('WA')">WA ↖</button>
+        <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W ↑</button>
+        <button class="btn btn-wasd" id="key-wd" onclick="sendCmd('WD')">WD ↗</button>
+        <button class="btn btn-wasd" id="key-a" onclick="sendCmd('A')">A ←</button>
+        <button class="btn btn-wasd btn-brake" id="key-b" onclick="sendCmd('B')">B (Brake)</button>
+        <button class="btn btn-wasd" id="key-d" onclick="sendCmd('D')">D →</button>
+        <button class="btn btn-wasd" id="key-sa" onclick="sendCmd('SA')">SA ↙</button>
+        <button class="btn btn-wasd" id="key-s" onclick="sendCmd('S')">S ↓</button>
+        <button class="btn btn-wasd" id="key-sd" onclick="sendCmd('SD')">SD ↘</button>
+      </div>
+      <div class="wasd-hint">WASD / Arrow Keys (B / Space = Brake)</div>
+    </section>
 
-  <section class="card">
-    <div class="label">Shoe target</div><div id="target" class="value">not seen</div>
-    <div class="label">YOLO Inference Rate</div><div id="yolo_fps" class="value">0.0 FPS</div>
-    <div class="label">Ultrasonic Distance</div><div id="distance" class="value">-</div>
-    <div class="label">Arduino Serial Status</div><div id="arduino">-</div>
-  </section>
+    <section class="card">
+      <div class="flex-row">
+        <div><div class="label">Shoe target</div><div id="target" class="value">not seen</div></div>
+        <div><div class="label">YOLO FPS</div><div id="yolo_fps" class="value">0.0 FPS</div></div>
+      </div>
+      <div class="flex-row">
+        <div><div class="label">Ultrasonic</div><div id="distance" class="value">-</div></div>
+        <div><div class="label">Arduino Serial</div><div id="arduino" class="value">-</div></div>
+      </div>
+    </section>
 
-  <section class="card">
-    <div class="label">Audio Event</div><div id="event" class="value">-</div>
-    <div class="label">Whisper Transcript</div><div id="transcript">-</div>
-    <button class="btn btn-stop" onclick="emergencyStop()">🚨 EMERGENCY STOP</button>
-    <div id="error"></div>
-  </section>
+    <section class="card">
+      <div class="label">Sound Classification (YAMNet Fusion)</div>
+      <div id="event" class="value">-</div>
+      <div class="label">Whisper Transcript (C++ GPU STT)</div>
+      <div id="transcript" class="value" style="color:#7ee787">-</div>
+      <div id="error"></div>
+    </section>
+  </div>
 </div>
 
 <script>
@@ -101,11 +121,23 @@ async function poll(){
     show('command', (r.command_left??0) + ' / ' + (r.command_right??0) + ' PWM');
     
     const t=v.target;
-    show('target', t ? 'x=' + t.centre_x.toFixed(2) + ', height=' + t.height_ratio.toFixed(2) : 'not seen');
+    show('target', t ? 'x=' + t.centre_x.toFixed(2) + ', h=' + t.height_ratio.toFixed(2) : 'not seen');
     show('yolo_fps', (v.fps ?? 0.0).toFixed(1) + ' FPS');
     show('distance', m.distance_cm == null ? '-' : m.distance_cm.toFixed(1) + ' cm');
-    show('arduino', m.ready ? 'CONNECTED (Serial)' : (m.connected ? 'WAITING' : 'OFFLINE'));
-    show('event', a.event ? (a.event + ' (' + (a.event_score??0).toFixed(2) + ')') : '-');
+    show('arduino', m.ready ? 'CONNECTED' : (m.connected ? 'WAITING' : 'OFFLINE'));
+    
+    const eventBox = document.getElementById('event');
+    if (a.event) {
+      const isAlarm = /alarm|bell|ring|siren|doorbell/i.test(a.event);
+      if (isAlarm) {
+        eventBox.innerHTML = `<span class="red-alert-banner">🚨 ${a.event.toUpperCase()} (${(a.event_score??0).toFixed(2)}) 🚨</span>`;
+      } else {
+        eventBox.textContent = `${a.event} (${(a.event_score??0).toFixed(2)})`;
+      }
+    } else {
+      eventBox.textContent = '-';
+    }
+
     show('transcript', a.text || '-');
     show('error', [v.error, a.error, m.error].filter(Boolean).join('\\n'));
   }catch(e){show('error', String(e))}
@@ -134,7 +166,6 @@ async function emergencyStop(){
   poll();
 }
 
-// ⌨️ Multi-key combination Keyboard listener (W+D -> WD, W+A -> WA, S+D -> SD, S+A -> SA)
 const activeKeys = new Set();
 let lastSentCmd = '';
 
