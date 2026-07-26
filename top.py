@@ -135,11 +135,18 @@ def main():
         motor_ready = motor is not None and motor.get_status()["ready"]
         return vision_ready and motor_ready
 
-    latest_transcript = ""
+    latest_audio_event = ""
+    latest_audio_score = 0.0
+    latest_audio_time = ""
 
     def audio_event(event, score):
-        print(f"[Top] Audio event: {event} ({score:.2f})")
-        if event in ("alarm", "alarm_clock"):
+        nonlocal latest_audio_event, latest_audio_score, latest_audio_time
+        ts = time.strftime("%H:%M:%S")
+        latest_audio_event = event
+        latest_audio_score = score
+        latest_audio_time = ts
+        print(f"[Top <- YAMNet] Real-time sound event: '{event}' ({score:.2f})")
+        if event in ("alarm", "alarm_clock", "bell", "doorbell", "ring", "siren"):
             if system_ready():
                 accepted = manager.trigger_alarm(event, score)
                 print(f"[Top] Mission accepted: {accepted}")
@@ -176,6 +183,10 @@ def main():
         audio_stat = {} if audio is None else audio.get_status()
         if latest_transcript:
             audio_stat["text"] = latest_transcript
+        if latest_audio_event:
+            audio_stat["event"] = latest_audio_event
+            audio_stat["event_score"] = latest_audio_score
+            audio_stat["event_time"] = latest_audio_time
         return {
             "robot": manager.get_status(),
             "vision": {} if detector is None else detector.get_status(),

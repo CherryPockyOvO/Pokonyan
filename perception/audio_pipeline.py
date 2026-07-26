@@ -115,7 +115,7 @@ def bandpass_filter(audio_data, sample_rate=16000, lowcut=500.0, highcut=4000.0,
 # YAMNet class-index groups (official 521-class AudioSet ontology)
 # ===================================================================
 SPEECH_EVENTS = {
-    "speech": (0,),
+    "speech": (0, 1, 2, 3),
 }
 
 BELL_EVENTS = {
@@ -124,6 +124,14 @@ BELL_EVENTS = {
     "doorbell":    (349, 350),
     "bell":        (173, 195, 196, 197, 198, 200, 201),
     "ring":        (202, 384, 385),
+    "siren":       (395, 396, 397),
+    "laughter":    (16, 17, 18),
+    "cough":       (45,),
+    "snore":       (48,),
+    "whistling":   (51,),
+    "music":       (137,),
+    "applause":    (57, 58),
+    "dog_bark":    (74, 75),
 }
 
 

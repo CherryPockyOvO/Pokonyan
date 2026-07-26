@@ -91,10 +91,10 @@ def main():
     print(f"[PC Audio] Target Raspberry Pi: http://{args.pi_host}:{args.port}/")
 
     def on_pc_audio_event(event, score):
-        print(f"[PC Audio] YAMNet detected sound: {event} ({score:.2f})")
+        print(f"[PC Audio] YAMNet real-time sound: '{event}' ({score:.2f}) -> Pushing to Web UI")
+        send_event_to_pi(args.pi_host, args.port, event, score)
         if event in ("alarm", "alarm_clock", "doorbell", "bell", "ring", "siren"):
-            print(f"[RED ALERT] Bell/Alarm sound detected: '{event}' ({score:.2f}) -> Pushing to Pi!")
-            send_event_to_pi(args.pi_host, args.port, event, score)
+            print(f"[RED ALERT] Bell/Alarm sound detected: '{event}' ({score:.2f})!")
 
     audio = YamnetWhisperAudioPipeline(
         yamnet_model_path=local_path(args.yamnet),

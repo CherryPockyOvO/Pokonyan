@@ -132,7 +132,7 @@ async function poll(){
       if (isAlarm) {
         eventBox.innerHTML = `<span class="red-alert-banner">🚨 ${a.event.toUpperCase()} (${(a.event_score??0).toFixed(2)}) 🚨</span>`;
       } else {
-        eventBox.textContent = `${a.event} (${(a.event_score??0).toFixed(2)})`;
+        eventBox.innerHTML = `<span style="color:#58a6ff;font-weight:bold;">🎵 ${a.event} (${(a.event_score??0).toFixed(2)})</span>`;
       }
     } else {
       eventBox.textContent = '-';
