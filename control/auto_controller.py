@@ -18,6 +18,7 @@ class AutoController:
         self.alert = ""
         self.alert_score = 0.0
         self.scan_steps = 0
+        self.last_seen_target_time = 0.0
         self.command = (0, 0)
         self.reason = "waiting for alarm (AUTO mode)"
 
@@ -131,12 +132,21 @@ class AutoController:
 
                 # B) 發現鞋子特判：在任何時刻（含 6 次旋轉掃描期間）只要發現鞋子，立刻中止旋轉掃描，直接追蹤！
                 if target is not None:
+                    self.last_seen_target_time = now
                     self.scan_steps = 0
                     self.scan_state = "DONE"
                     cmd, track_reason = self.shoe_tracker.tick(target, distance)
                     self.command = cmd
                     self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
+
+                # C) 掉幀/目標突發丟失特判：上一幀看到鞋子，下一幀突然沒看到 -> 原地保持靜止 (0, 0) 停頓等待 1.0 秒
+                if self.last_seen_target_time > 0.0:
+                    time_since_lost = now - self.last_seen_target_time
+                    if time_since_lost <= 1.0:
+                        self.command = (0, 0)
+                        self.reason = f"⏳ Shoe target suddenly lost ({time_since_lost:.1f}s <= 1.0s): Pausing in place (0, 0) for 1s to inspect frame"
+                        return self.command
 
                 # C) 沒看到鞋子，且尚未完成 6 次步進旋轉掃描：執行 6 次步進旋轉（每次轉動 0.5s -> 原地停止 1.0s 讀幀）
                 if self.scan_steps < 6 and self.scan_state != "DONE":
