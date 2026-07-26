@@ -151,10 +151,10 @@ class AutoController:
                     self.reason = f"[No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}] {track_reason}"
                     return self.command
                 else:
-                    # 標誌位已觸發但視野暫時無目標：全速直向前進 (165, 165)，不避障直到撞擊目標
-                    cmd = (165, 165)
+                    # 標誌位已觸發但視野暫時無目標：直向前進 (220, 220)，不避障直到撞擊目標
+                    cmd = (220, 220)
                     self.command = cmd
-                    self.reason = f"Seeking target (No Obstacle Avoidance | Large Shoe Seen: {self.ever_saw_large_shoe}): Driving forward"
+                    self.reason = f"Seeking target (No Obstacle Avoidance | Large Shoe Seen: {self.ever_saw_large_shoe}): Driving forward (220, 220)"
                     return self.command
 
             # -------------------------------------------------------------

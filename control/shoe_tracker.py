@@ -83,7 +83,7 @@ class ShoeTrackerController:
             valid_dist = distance_cm is not None and distance_cm > 0.0
 
             # -------------------------------------------------------------
-            # 2. 抵達鞋子特判：持續前進 (165, 165)
+            # 2. 抵達鞋子特判：持續前進 (220, 220)
             # -------------------------------------------------------------
             is_at_shoe = (
                 (valid_dist and distance_cm <= self.stop_dist_cm)
@@ -92,7 +92,7 @@ class ShoeTrackerController:
             if is_at_shoe:
                 dist_str = f"{distance_cm:.1f}cm" if valid_dist else "N/A"
                 self.reason = f"💥 Bumping into shoe repeatedly! (Distance: {dist_str}, Height: {height_ratio*100:.1f}%)"
-                return (165, 165), self.reason
+                return (220, 220), self.reason
 
             # -------------------------------------------------------------
             # 3. 雙階段自適應追蹤演算法 (Dual-Stage Adaptive Steering)
@@ -102,14 +102,14 @@ class ShoeTrackerController:
             if is_far_target:
                 self.pulse_state = "IDLE"  # 遠距離使用連續平滑弧線
                 if abs(dx) <= self.deadband_px:
-                    cmd = (165, 165)
+                    cmd = (220, 220)
                     self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 elif dx < 0:
-                    cmd = (40, 180)  # 左前弧線 WA (40, 180)
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 40, 180, dx={dx:.1f})"
+                    cmd = (80, 220)  # 左前弧線 WA (80, 220)
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 80, 220, dx={dx:.1f})"
                 else:
-                    cmd = (180, 40)  # 右前弧線 WD (180, 40)
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 180, 40, dx={dx:.1f})"
+                    cmd = (220, 80)  # 右前弧線 WD (220, 80)
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 220, 80, dx={dx:.1f})"
                 return cmd, self.reason
 
             # ---------------------------------------------------------
@@ -130,7 +130,7 @@ class ShoeTrackerController:
                     self.pulse_state = "IDLE"
 
             if abs(dx) <= self.deadband_px:
-                cmd = (165, 165)
+                cmd = (220, 220)
                 self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 return cmd, self.reason
 
@@ -138,14 +138,14 @@ class ShoeTrackerController:
                 cmd = (-175, 180)
                 act_name = "Step Spin Left (-175, 180)"
             elif dx < -self.deadband_px:
-                cmd = (40, 180)
-                act_name = "Step Curve Left (40, 180)"
+                cmd = (80, 220)
+                act_name = "Step Curve Left (80, 220)"
             elif dx > 90.0:
                 cmd = (180, -175)
                 act_name = "Step Spin Right (180, -175)"
             else:
-                cmd = (180, 40)
-                act_name = "Step Curve Right (180, 40)"
+                cmd = (220, 80)
+                act_name = "Step Curve Right (220, 80)"
 
             self.pulse_state = "PULSING"
             self.pulse_cmd = cmd

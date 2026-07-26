@@ -33,25 +33,25 @@ class PetWanderController:
         self.avoid_start_time = 0.0
         self.reason = "Pet wander initialized"
 
-        # 定義可選的非後退運動動作及其隨機持續時間 (秒) 與 PWM (左, 右) (加大轉彎動力與轉角)
+        # 定義可選的非後退運動動作及其隨機持續時間 (秒) 與 PWM (左, 右) (直行220，單輪低限>=80)
         self.actions = {
             "W": {
-                "pwm": (165, 165),        # 直前 (165, 165)
+                "pwm": (220, 220),        # 直前 (220, 220)
                 "duration": (1.5, 3.5),
                 "weight": 40,
-                "name": "Forward (W: 165, 165)",
+                "name": "Forward (W: 220, 220)",
             },
             "WA": {
-                "pwm": (40, 180),         # 大角度組合鍵左拐 (40, 180)
+                "pwm": (80, 220),         # 組合鍵左拐 (80, 220)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Left (WA: 40, 180)",
+                "name": "Forward-Left (WA: 80, 220)",
             },
             "WD": {
-                "pwm": (180, 40),         # 大角度組合鍵右拐 (180, 40)
+                "pwm": (220, 80),         # 組合鍵右拐 (220, 80)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Right (WD: 180, 40)",
+                "name": "Forward-Right (WD: 220, 80)",
             },
             "A": {
                 "pwm": (-175, 180),       # 強力原地左轉 (-175, 180)
