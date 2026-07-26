@@ -167,15 +167,22 @@ async function toggleMicrophone() {
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     if (audioContext) audioContext.close();
     isMicStreaming = false;
-    btn.textContent = '🎙️ 開啟華為手機麥克風 (Stream Mic to PC)';
+    btn.textContent = '🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)';
     btn.classList.remove('btn-mic-on');
     status.textContent = '麥克風已停止串流';
     status.style.color = '#8b949e';
   } else {
     // Start Microphone
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('iOS Safari 安全限制：請確保網址為 https:// ！');
+        return;
+      }
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }, video: false });
       audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
       const source = audioContext.createMediaStreamSource(mediaStream);
       
       // 4096 samples buffer (~0.25s at 16kHz)
@@ -202,13 +209,13 @@ async function toggleMicrophone() {
       scriptNode.connect(audioContext.destination);
 
       isMicStreaming = true;
-      btn.textContent = '🛑 麥克風收音中 (點擊停止串流)';
+      btn.textContent = '🛑 iPhone 麥克風收音中 (點擊停止)';
       btn.classList.add('btn-mic-on');
-      status.textContent = '🟢 華為手機麥克風正在向電腦實時串流音訊中...';
+      status.textContent = '🟢 iPhone 麥克風正在向電腦實時串流音訊中...';
       status.style.color = '#7ee787';
     } catch (err) {
-      alert('無法存取華為手機麥克風：' + err.message);
-      status.textContent = '存取麥克風失敗，請確保使用 HTTPS 或在瀏覽器中允許麥克風權限';
+      alert('無法存取 iPhone 麥克風：' + err.message + '\\n\\n提示：請確保在 iPhone 網址列中使用 https:// 存取！');
+      status.textContent = '存取麥克風失敗，請確保使用 HTTPS 並在 Safari 允許權限';
       status.style.color = '#da3633';
     }
   }
@@ -385,6 +392,55 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                     last_trigger_time = now
                     send_event_to_pi(top_name, top_score)
 
+import ssl
+import datetime
+
+def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        return cert_file, key_file
+
+    print("[SSL] Generating self-signed HTTPS certificate for iOS Safari / iPhone Microphone access...")
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "Pokonyan Mobile Bridge"),
+        ])
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.utcnow()
+        ).not_valid_after(
+            datetime.datetime.utcnow() + datetime.timedelta(days=365)
+        ).sign(key, hashes.SHA256())
+
+        with open(key_file, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+
+        with open(cert_file, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        print(f"[SSL] Certificate created: {cert_file}, {key_file}")
+    except Exception as e:
+        print(f"[SSL Warning] Failed to generate certificate: {e}")
+
+    return cert_file, key_file
+
 def main():
     parser = argparse.ArgumentParser(description="PC Mobile Audio Bridge Server")
     parser.add_argument("--port", type=int, default=5000, help="PC Mobile Web server port (default: 5000)")
@@ -402,13 +458,23 @@ def main():
     yamnet_thread = threading.Thread(target=run_mobile_yamnet, args=(args.pi_host, args.pi_port, model_path, 0.20), daemon=True)
     yamnet_thread.start()
 
+    cert_file, key_file = ensure_ssl_cert()
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
+
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+        protocol = "https"
+    else:
+        protocol = "http"
+
     print(f"========================================================")
     print(f" 📱 Pokonyan Mobile Mic & Control Bridge Server Started!")
     print(f"========================================================")
-    print(f"🌐 Mobile Phone URL: http://<PC_IP>:{args.port}/ (e.g. http://100.103.37.56:{args.port}/)")
-    print(f"📡 Target Pi       : http://{args.pi_host}:{args.pi_port}/")
-    print(f"🎙️ Open URL on Huawei phone to stream mic & view dashboard!\n")
+    print(f"🌐 iPhone / Mobile URL: {protocol}://<PC_IP>:{args.port}/ (e.g. {protocol}://100.103.37.56:{args.port}/)")
+    print(f"📡 Target Pi         : http://{args.pi_host}:{args.pi_port}/")
+    print(f"🎙️ Open {protocol}:// in Safari on iPhone 17 Pro Max to grant mic!\n")
 
     try:
         server.serve_forever()
