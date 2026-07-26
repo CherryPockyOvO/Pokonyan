@@ -125,10 +125,13 @@ class ShoeTrackerController:
                     self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): {act_name} (dx={dx:.1f}) -> Pause 1.0s"
                     return self.pulse_cmd, self.reason
 
-                # 對準中心：原地保持靜止 (0, 0)，絕不盲目衝刺，等待撞擊與狀態確認
-                cmd = (0, 0)
-                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Centered (dx={dx:.1f}) -> Stopped (0, 0), waiting for collision"
-                return cmd, self.reason
+                # 對準中心：執行 (150, 150) 步進直行 0.15s，隨後停頓 1.0 秒供鏡頭重新觀察
+                cmd = (150, 150)
+                self.pulse_state = "PULSING"
+                self.pulse_cmd = cmd
+                self.pulse_until = now + self.pulse_duration_sec
+                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Centered -> Step Forward (150, 150) -> Pause 1.0s"
+                return self.pulse_cmd, self.reason
 
             # -------------------------------------------------------------
             # 階段 3: 鞋子面積/高度小於 10% (< 0.10) -> 遠距離模式 (組合鍵 WA/WD 逼近)
