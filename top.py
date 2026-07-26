@@ -329,14 +329,31 @@ def main():
             if motor is None:
                 continue
             target = None if detector is None else detector.get_target(max_age=0.5)
-            command = manager.tick(target, motor.get_status())
+            motor_stat = motor.get_status()
+            command = manager.tick(target, motor_stat)
             motor.set_target(*command)
             current = manager.get_status()
-            marker = (current["mode"], current["state"], current["reason"], command)
+
+            bumper_pressed = motor_stat.get("bumper_pressed", False)
+            bumper_str = "💥 B1 (COLLISION 撞擊)" if bumper_pressed else "🟢 B0 (NO BUMP 沒撞擊)"
+
+            auto_state = current.get("state", "IDLE")
+            seeking_shoe = (current["mode"] == "AUTO" and auto_state == "TRACKING_SHOE")
+            if current["mode"] != "AUTO":
+                seeking_str = "🎮 MANUAL MODE (手動控制)"
+            elif auto_state == "TRACKING_SHOE":
+                seeking_str = "🔍 SEEKING SHOE (尋找鞋子中)"
+            elif auto_state == "HIT_SHOE":
+                seeking_str = "👟 HIT SHOE (已撞到鞋子, 停留5秒)"
+            else:
+                seeking_str = "💤 WANDERING (普通漫遊)"
+
+            marker = (current["mode"], auto_state, current["reason"], command, bumper_pressed)
             if marker != previous:
                 print(
-                    f"[Top] [{current['mode']}] {current['state']}: {current['reason']} "
-                    f"PWM: {command[0]} / {command[1]}"
+                    f"\n[8080 Terminal] 🤖 Mode: {current['mode']} | Bumper: {bumper_str} | Status: {seeking_str}\n"
+                    f"                Reason: {current['reason']}\n"
+                    f"                Motor PWM: L={command[0]} / R={command[1]}\n"
                 )
                 previous = marker
     finally:
