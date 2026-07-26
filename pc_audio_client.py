@@ -11,6 +11,13 @@ from pathlib import Path
 import sys
 import time
 import urllib.request
+import subprocess
+
+try:
+    import sounddevice
+except ImportError:
+    print("[PC Audio] Installing missing 'sounddevice' package...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "sounddevice"])
 
 # Ensure local perception directory can be imported
 BASE_DIR = Path(__file__).resolve().parent
