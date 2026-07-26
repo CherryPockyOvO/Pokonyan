@@ -94,52 +94,60 @@ MOBILE_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>📱 Pokonyan iPhone / 手機麥克風 語音與聲音識別控制台</title>
+<title>🤖 Pokonyan Robot Car Display</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-body { background: #0d1117; color: #c9d1d9; padding: 16px; font-size: 15px; }
-.header { text-align: center; margin-bottom: 16px; }
-.header h1 { font-size: 20px; color: #58a6ff; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-.label { font-size: 12px; color: #8b949e; text-transform: uppercase; margin-bottom: 6px; font-weight: bold; }
-.value { font-size: 16px; font-weight: bold; min-height: 24px; word-break: break-word; }
-.btn { background: #238636; color: white; border: none; border-radius: 8px; padding: 16px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; text-align: center; }
-.btn:active { opacity: 0.8; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background: #05070a; color: #f0f6fc; padding: 14px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; background: #0d1117; padding: 10px 14px; border-radius: 12px; border: 1px solid #21262d; }
+.logo-title { font-size: 16px; font-weight: bold; color: #58a6ff; display: flex; align-items: center; gap: 8px; }
+.btn-mic { background: #238636; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
 .btn-mic-on { background: #da3633; animation: pulse 1.0s infinite alternate; }
-.doorbell-banner { background: #d97706; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
-.red-alert-banner { background: #da3633; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-weight: bold; display: inline-block; animation: pulse 0.8s infinite alternate; }
-@keyframes pulse { from { opacity: 0.8; transform: scale(0.98); } to { opacity: 1; transform: scale(1.02); } }
+
+/* Robot Sound Banners */
+.status-card { background: #0d1117; border: 2px solid #21262d; border-radius: 16px; padding: 18px; text-align: center; margin-bottom: 14px; transition: all 0.3s ease; }
+.banner-normal { background: rgba(35, 134, 54, 0.15); border-color: #238636; color: #3fb950; }
+.banner-doorbell { background: rgba(217, 119, 6, 0.25); border-color: #f59e0b; color: #fbbf24; animation: glow-gold 1.0s infinite alternate; }
+.banner-alarm { background: rgba(218, 54, 51, 0.25); border-color: #f85149; color: #ff7b72; animation: glow-red 0.8s infinite alternate; }
+
+.status-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 6px; font-weight: bold; }
+.status-headline { font-size: 26px; font-weight: 900; letter-spacing: 0.5px; }
+
+/* High-Legibility STT Display Box */
+.stt-card { background: #0d1117; border: 1px solid #30363d; border-radius: 16px; padding: 18px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+.stt-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold; }
+.stt-final { font-size: 28px; font-weight: 800; color: #58a6ff; line-height: 1.3; min-height: 70px; word-break: break-word; }
+.stt-live { font-size: 20px; font-weight: 600; color: #e3b341; line-height: 1.3; margin-top: 14px; min-height: 32px; word-break: break-word; }
+
+@keyframes glow-gold { from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); } to { box-shadow: 0 0 25px rgba(245, 158, 11, 0.8); } }
+@keyframes glow-red { from { box-shadow: 0 0 10px rgba(248, 81, 73, 0.4); } to { box-shadow: 0 0 30px rgba(248, 81, 73, 0.9); } }
+@keyframes pulse { from { opacity: 0.8; } to { opacity: 1.0; } }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>📱 iPhone 麥克風 & 聲音識別控制台</h1>
+<!-- 頂部精簡控制條 -->
+<div class="top-bar">
+  <div class="logo-title">🤖 Pokonyan 車載螢幕</div>
+  <button id="btn-mic" class="btn-mic" onclick="toggleMicrophone()">🎙️ 開啟麥克風</button>
 </div>
 
-<!-- 🎙️ 手機麥克風開關 -->
-<div class="card">
-  <button id="btn-mic" class="btn" onclick="toggleMicrophone()">🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)</button>
-  <div id="mic-status" style="font-size: 13px; color: #8b949e; margin-top: 8px; text-align: center;">點擊按鈕授權麥克風，即可將 iPhone 當作電腦麥克風使用</div>
+<!-- 🚨 車載警報與門鈴動態標誌位 (全螢幕霓虹發光) -->
+<div id="status-card" class="status-card banner-normal">
+  <div class="status-title">ENVIRONMENT SOUND STATUS</div>
+  <div id="status-headline" class="status-headline">🟢 NORMAL</div>
+  <div id="sound-detail" style="font-size: 14px; margin-top: 6px; opacity: 0.8;">-</div>
 </div>
 
-<!-- 🚨 聲音識別與門鈴標誌位 -->
-<div class="card">
-  <div class="label">Doorbell / Alarm Status (Flag 標誌位)</div>
-  <div id="alarm_flag_box" class="value"><span style="color:#7ee787;">🟢 NORMAL (No Event)</span></div>
+<!-- 💬 車載大字體語音識別 (Final Sentence 28px + Realtime Draft 20px) -->
+<div class="stt-card">
+  <div class="stt-label">💬 COMPLETED SENTENCE (完整語音)</div>
+  <div id="transcript" class="stt-final">-</div>
   
-  <div class="label" style="margin-top: 12px;">Realtime Sound Classification (實時聲音分類)</div>
-  <div id="event" class="value" style="color:#58a6ff;">-</div>
+  <div class="stt-label" style="margin-top: 16px;">⚡ REALTIME STREAMING DRAFT (實時草稿)</div>
+  <div id="live_transcript" class="stt-live">-</div>
 </div>
 
-<!-- 💬 STT 語音識別展演 -->
-<div class="card">
-  <div class="label">Last Completed Sentence (Final STT 完整句子)</div>
-  <div id="transcript" class="value" style="color:#7ee787; font-size: 18px;">-</div>
-  
-  <div class="label" style="margin-top: 12px;">Realtime Live Recognition (Streaming Draft 實時草稿)</div>
-  <div id="live_transcript" class="value" style="color:#e3b341; font-size: 16px;">-</div>
-</div>
+<div id="mic-status" style="font-size: 12px; color: #8b949e; text-align: center; margin-top: 8px;">點擊「開啟麥克風」授權串流</div>
 
 <script>
 let isMicStreaming = false;
@@ -158,7 +166,7 @@ async function toggleMicrophone() {
     if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     if (audioContext) audioContext.close();
     isMicStreaming = false;
-    btn.textContent = '🎙️ 開啟 iPhone 麥克風 (Stream Mic to PC)';
+    btn.textContent = '🎙️ 開啟麥克風';
     btn.classList.remove('btn-mic-on');
     status.textContent = '麥克風已停止串流';
     status.style.color = '#8b949e';
@@ -174,21 +182,20 @@ async function toggleMicrophone() {
         await audioContext.resume();
       }
 
-      // Establish WebSocket connection
       const wsProtocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
       ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws_audio`);
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
-        status.textContent = '🟢 WebSocket 麥克風長連接建立成功！正在實時向電腦串流音訊中...';
-        status.style.color = '#7ee787';
+        status.textContent = '🟢 WebSocket 麥克風已連接，音訊實時傳輸中...';
+        status.style.color = '#3fb950';
       };
 
       const source = audioContext.createMediaStreamSource(mediaStream);
       scriptNode = audioContext.createScriptProcessor(2048, 1, 1);
       
       const silenceGain = audioContext.createGain();
-      silenceGain.gain.value = 0; // Prevent local audio feedback loop
+      silenceGain.gain.value = 0;
 
       scriptNode.onaudioprocess = (e) => {
         if (!isMicStreaming) return;
@@ -215,12 +222,12 @@ async function toggleMicrophone() {
       silenceGain.connect(audioContext.destination);
 
       isMicStreaming = true;
-      btn.textContent = '🛑 iPhone 麥克風收音中 (點擊停止)';
+      btn.textContent = '🛑 麥克風收音中';
       btn.classList.add('btn-mic-on');
     } catch (err) {
-      alert('無法存取 iPhone 麥克風：' + err.message);
+      alert('無法存取麥克風：' + err.message);
       status.textContent = '存取麥克風失敗：' + err.message;
-      status.style.color = '#da3633';
+      status.style.color = '#f85149';
     }
   }
 }
@@ -232,24 +239,27 @@ async function pollStatus() {
     const s = await res.json();
     const a = s.audio || s;
 
-    const flagBox = document.getElementById('alarm_flag_box');
+    const card = document.getElementById('status-card');
+    const headline = document.getElementById('status-headline');
+    const detail = document.getElementById('sound-detail');
+
     const cat = a.category || 'NORMAL';
     const evtName = (a.alarm_event || '').toUpperCase();
     const evtScore = (a.alarm_score || 0).toFixed(2);
+    const liveEvt = a.event && a.event !== '-' ? `${a.event} (${(a.event_score??0).toFixed(2)})` : '-';
 
     if (cat === 'ALARM') {
-      flagBox.innerHTML = `<span class="red-alert-banner">🚨 ALARM DETECTED (${evtName} / ${evtScore}) 🚨</span>`;
+      card.className = 'status-card banner-alarm';
+      headline.textContent = '🚨 ALARM DETECTED';
+      detail.textContent = `警報類型: ${evtName} | 置信度: ${evtScore}`;
     } else if (cat === 'DOORBELL') {
-      flagBox.innerHTML = `<span class="doorbell-banner">🔔 DOORBELL DETECTED (${evtName} / ${evtScore}) 🔔</span>`;
+      card.className = 'status-card banner-doorbell';
+      headline.textContent = '🔔 DOORBELL DETECTED';
+      detail.textContent = `門鈴類型: ${evtName} | 置信度: ${evtScore}`;
     } else {
-      flagBox.innerHTML = `<span style="color:#7ee787;">🟢 NORMAL (No Event)</span>`;
-    }
-
-    const eventBox = document.getElementById('event');
-    if (a.event && a.event !== '-') {
-      eventBox.innerHTML = `<span style="color:#58a6ff;">🎵 ${a.event} (${(a.event_score??0).toFixed(2)})</span>`;
-    } else {
-      eventBox.textContent = '-';
+      card.className = 'status-card banner-normal';
+      headline.textContent = '🟢 NORMAL';
+      detail.textContent = `實時環境聲音: ${liveEvt}`;
     }
 
     document.getElementById('transcript').textContent = a.text || '-';
