@@ -17,7 +17,6 @@ class ShoeTrackerController:
     """
 
     def __init__(
-
         self,
         target_center_x=320.0,
         deadband_px=30.0,
@@ -26,7 +25,7 @@ class ShoeTrackerController:
         stop_dist_cm=15.0,
         full_shoe_height_ratio=0.60,
         pulse_duration_sec=0.15,
-        pulse_pause_sec=0.10,
+        pulse_pause_sec=1.0,  # 近距離轉灣停頓改為 1.0 秒，確保鏡頭畫面穩定
         **kwargs,
     ):
         self.lock = threading.Lock()
@@ -60,7 +59,7 @@ class ShoeTrackerController:
             self.reason = "Shoe tracker reset"
 
     def tick(self, target, distance_cm):
-        """核心追蹤週期函數：當視野出現鞋子框時，根據目標大小自適應選擇平滑弧線或步進轉向。"""
+        """核心追蹤週期函數：遠距離平滑逼近，近距離降速 150 直行撞擊與 1s 停頓原地轉灣。"""
         now = time.monotonic()
         with self.lock:
             if target is None:
@@ -83,19 +82,7 @@ class ShoeTrackerController:
             valid_dist = distance_cm is not None and distance_cm > 0.0
 
             # -------------------------------------------------------------
-            # 2. 抵達鞋子特判：持續前進 (220, 220)
-            # -------------------------------------------------------------
-            is_at_shoe = (
-                (valid_dist and distance_cm <= self.stop_dist_cm)
-                or height_ratio >= self.full_shoe_height_ratio
-            )
-            if is_at_shoe:
-                dist_str = f"{distance_cm:.1f}cm" if valid_dist else "N/A"
-                self.reason = f"💥 Bumping into shoe repeatedly! (Distance: {dist_str}, Height: {height_ratio*100:.1f}%)"
-                return (220, 220), self.reason
-
-            # -------------------------------------------------------------
-            # 3. 雙階段自適應追蹤演算法 (Dual-Stage Adaptive Steering)
+            # 2. 判斷目標距離階段 (遠距離 < 25% vs 近距離 >= 25%)
             # -------------------------------------------------------------
             is_far_target = height_ratio < 0.25  # 鞋子較小 / 較遠 (畫面高度佔比 < 25%)
 
@@ -103,53 +90,48 @@ class ShoeTrackerController:
                 self.pulse_state = "IDLE"  # 遠距離使用連續平滑弧線
                 if abs(dx) <= self.deadband_px:
                     cmd = (220, 220)
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
+                    self.reason = f"🎯 Far Pursuit (Height {height_ratio*100:.0f}%): Centered -> Drive Forward (220, 220)"
                 elif dx < 0:
                     cmd = (80, 220)  # 左前弧線 WA (80, 220)
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 80, 220, dx={dx:.1f})"
+                    self.reason = f"🎯 Far Pursuit (Height {height_ratio*100:.0f}%): Curved Left (WA: 80, 220)"
                 else:
                     cmd = (220, 80)  # 右前弧線 WD (220, 80)
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 220, 80, dx={dx:.1f})"
+                    self.reason = f"🎯 Far Pursuit (Height {height_ratio*100:.0f}%): Curved Right (WD: 220, 80)"
                 return cmd, self.reason
 
-            # ---------------------------------------------------------
-            # 階段 B: 近距離 / 大目標 (Height >= 25%)
-            # ---------------------------------------------------------
+            # -------------------------------------------------------------
+            # 3. 近距離模式 (Height >= 25%): 速度下降為 150，只有原地旋轉 (240, -240) 與直線撞擊 (150, 150)
+            # -------------------------------------------------------------
             if self.pulse_state == "PULSING":
                 if now < self.pulse_until:
                     return self.pulse_cmd, self.reason
                 else:
                     self.pulse_state = "PAUSING"
                     self.pause_until = now + self.pulse_pause_sec
-                    return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
+                    return (0, 0), "🎯 Near Mode: Steering pulse pause 1.0s (inspecting camera frame)"
 
             if self.pulse_state == "PAUSING":
                 if now < self.pause_until:
-                    return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
+                    return (0, 0), "🎯 Near Mode: Steering pulse pause 1.0s (inspecting camera frame)"
                 else:
                     self.pulse_state = "IDLE"
 
-            if abs(dx) <= self.deadband_px:
-                cmd = (220, 220)
-                self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
-                return cmd, self.reason
+            # 偏出中心門檻以外：執行原地步進旋轉 (240, -240) / (-240, 240)，旋轉後停頓 1.0 秒
+            if abs(dx) > self.deadband_px:
+                if dx < 0:
+                    cmd = (-240, 240)
+                    act_name = "In-place Spin Left (-240, 240)"
+                else:
+                    cmd = (240, -240)
+                    act_name = "In-place Spin Right (240, -240)"
 
-            if dx < -90.0:
-                cmd = (-240, 240)
-                act_name = "Step Spin Left (-240, 240)"
-            elif dx < -self.deadband_px:
-                cmd = (80, 220)
-                act_name = "Step Curve Left (80, 220)"
-            elif dx > 90.0:
-                cmd = (240, -240)
-                act_name = "Step Spin Right (240, -240)"
-            else:
-                cmd = (220, 80)
-                act_name = "Step Curve Right (220, 80)"
+                self.pulse_state = "PULSING"
+                self.pulse_cmd = cmd
+                self.pulse_until = now + self.pulse_duration_sec
+                self.reason = f"🎯 Near Mode (Height {height_ratio*100:.0f}%): {act_name} (dx={dx:.1f}) -> Pause 1.0s"
+                return self.pulse_cmd, self.reason
 
-            self.pulse_state = "PULSING"
-            self.pulse_cmd = cmd
-            self.pulse_until = now + (0.18 if abs(dx) <= 90 else self.pulse_duration_sec)
-            self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): {act_name} (dx={dx:.1f})"
-
-            return self.pulse_cmd, self.reason
+            # 對準中心：溫和低速衝刺撞擊 (150, 150)，避免高速衝撞
+            cmd = (150, 150)
+            self.reason = f"🎯 Near Mode (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Gentle Forward (150, 150)"
+            return cmd, self.reason
