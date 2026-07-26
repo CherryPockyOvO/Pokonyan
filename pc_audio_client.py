@@ -26,6 +26,13 @@ sys.path.insert(0, str(BASE_DIR))
 from perception.audio_pipeline import YamnetWhisperAudioPipeline
 
 
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
+
 def local_path(value):
     path = Path(value).expanduser()
     if path.is_absolute():
@@ -67,13 +74,13 @@ def main():
     parser.add_argument("--event-thresh", type=float, default=0.45)
     args = parser.parse_args()
 
-    print(f"🎙️ Local PC Audio Node starting...")
-    print(f"📡 Target Raspberry Pi: http://{args.pi_host}:{args.port}/")
+    print(f"[PC Audio] Local PC Audio Node starting...")
+    print(f"[PC Audio] Target Raspberry Pi: http://{args.pi_host}:{args.port}/")
 
     def on_pc_audio_event(event, score):
-        print(f"🔔 Local PC YAMNet detected sound: {event} ({score:.2f})")
+        print(f"[PC Audio] YAMNet detected sound: {event} ({score:.2f})")
         if event in ("alarm", "alarm_clock", "doorbell", "bell", "ring", "siren"):
-            print(f"🚨 [RED ALERT] Bell/Alarm sound detected: '{event}' ({score:.2f}) -> Pushing to Pi!")
+            print(f"[RED ALERT] Bell/Alarm sound detected: '{event}' ({score:.2f}) -> Pushing to Pi!")
             send_event_to_pi(args.pi_host, args.port, event, score)
 
     audio = YamnetWhisperAudioPipeline(
@@ -84,7 +91,7 @@ def main():
         on_event=on_pc_audio_event,
     )
     audio.start()
-    print("✅ Local PC Microphone listening... Press Ctrl+C to stop.")
+    print("[PC Audio] Microphone listening... Press Ctrl+C to stop.")
 
     try:
         while True:
