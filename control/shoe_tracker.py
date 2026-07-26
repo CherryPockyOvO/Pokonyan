@@ -105,11 +105,11 @@ class ShoeTrackerController:
                     cmd = (165, 165)
                     self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 elif dx < 0:
-                    cmd = (60, 165)  # 左前弧線 WA
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 60, 165, dx={dx:.1f})"
+                    cmd = (40, 180)  # 左前弧線 WA (40, 180)
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 40, 180, dx={dx:.1f})"
                 else:
-                    cmd = (165, 60)  # 右前弧線 WD
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 165, 60, dx={dx:.1f})"
+                    cmd = (180, 40)  # 右前弧線 WD (180, 40)
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 180, 40, dx={dx:.1f})"
                 return cmd, self.reason
 
             # ---------------------------------------------------------
@@ -135,17 +135,17 @@ class ShoeTrackerController:
                 return cmd, self.reason
 
             if dx < -90.0:
-                cmd = (-135, 140)
-                act_name = "Step Spin Left (-135, 140)"
+                cmd = (-175, 180)
+                act_name = "Step Spin Left (-175, 180)"
             elif dx < -self.deadband_px:
-                cmd = (60, 165)
-                act_name = "Step Curve Left (60, 165)"
+                cmd = (40, 180)
+                act_name = "Step Curve Left (40, 180)"
             elif dx > 90.0:
-                cmd = (140, -135)
-                act_name = "Step Spin Right (140, -135)"
+                cmd = (180, -175)
+                act_name = "Step Spin Right (180, -175)"
             else:
-                cmd = (165, 60)
-                act_name = "Step Curve Right (165, 60)"
+                cmd = (180, 40)
+                act_name = "Step Curve Right (180, 40)"
 
             self.pulse_state = "PULSING"
             self.pulse_cmd = cmd

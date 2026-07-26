@@ -455,15 +455,22 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
             return
 
-        if self.path == "/trigger_audio_event":
+        if self.path == "/trigger_audio_event" or self.path == "/reset_audio_status":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body.decode("utf-8"))
+                cat = data.get("category", "")
                 event = data.get("event", "").strip()
                 score = float(data.get("score", 0.0))
                 now = time.monotonic()
-                if event:
+                if cat == "NORMAL" or (event == "" and score == 0.0):
+                    latest_audio_status["category"] = "NORMAL"
+                    latest_audio_status["alarm_event"] = ""
+                    latest_audio_status["alarm_score"] = 0.0
+                    latest_audio_status["event"] = "-"
+                    latest_audio_status["event_score"] = 0.0
+                elif event:
                     curr_cat = latest_audio_status.get("category", "NORMAL")
                     is_alarm_evt = event in list(ALARM_CLASSES.values())
                     is_doorbell_evt = event in list(DOORBELL_CLASSES.values())

@@ -33,7 +33,7 @@ class PetWanderController:
         self.avoid_start_time = 0.0
         self.reason = "Pet wander initialized"
 
-        # 定義可選的非後退運動動作及其隨機持續時間 (秒) 與 PWM (左, 右) (調低整體速度)
+        # 定義可選的非後退運動動作及其隨機持續時間 (秒) 與 PWM (左, 右) (加大轉彎動力與轉角)
         self.actions = {
             "W": {
                 "pwm": (165, 165),        # 直前 (165, 165)
@@ -42,28 +42,28 @@ class PetWanderController:
                 "name": "Forward (W: 165, 165)",
             },
             "WA": {
-                "pwm": (60, 165),         # 組合鍵左拐 (60, 165)
+                "pwm": (40, 180),         # 大角度組合鍵左拐 (40, 180)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Left (WA: 60, 165)",
+                "name": "Forward-Left (WA: 40, 180)",
             },
             "WD": {
-                "pwm": (165, 60),         # 組合鍵右拐 (165, 60)
+                "pwm": (180, 40),         # 大角度組合鍵右拐 (180, 40)
                 "duration": (1.0, 2.5),
                 "weight": 20,
-                "name": "Forward-Right (WD: 165, 60)",
+                "name": "Forward-Right (WD: 180, 40)",
             },
             "A": {
-                "pwm": (-135, 140),       # 左拐 (-135, 140)
+                "pwm": (-175, 180),       # 強力原地左轉 (-175, 180)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Left (A: -135, 140)",
+                "name": "Turn-Left (A: -175, 180)",
             },
             "D": {
-                "pwm": (140, -135),       # 右拐 (140, -135)
+                "pwm": (180, -175),       # 強力原地右轉 (180, -175)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Right (D: 140, -135)",
+                "name": "Turn-Right (D: 180, -175)",
             },
             "B": {
                 "pwm": (0, 0),
@@ -131,11 +131,11 @@ class PetWanderController:
                     self._pick_next_action(now)
                 else:
                     if self.avoid_direction == "A":
-                        self.current_cmd = (-135, 140)
-                        dir_str = "Spin Left (A: -135, 140)"
+                        self.current_cmd = (-175, 180)
+                        dir_str = "Spin Left (A: -175, 180)"
                     else:
-                        self.current_cmd = (140, -135)
-                        dir_str = "Spin Right (D: 140, -135)"
+                        self.current_cmd = (180, -175)
+                        dir_str = "Spin Right (D: 180, -175)"
                     dist_str = f"{distance_cm:.1f}cm" if distance_cm is not None else "N/A"
                     self.reason = f"🚨 Obstacle ({dist_str} <= {self.obstacle_dist_cm}cm) -> Evading: {dir_str}"
                     return self.current_cmd, self.reason

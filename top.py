@@ -227,6 +227,16 @@ def main():
 
         # 當 AutoController 追蹤並撞到鞋子停留 5 秒完成重置後，警報狀態同步清除恢復 NORMAL
         if manager.auto_ctrl.alert == "":
+            if status_category != "NORMAL":
+                # 同步通知 Port 5000 重置網頁 UI 為 NORMAL
+                try:
+                    url_reset = "http://127.0.0.1:5000/reset_audio_status"
+                    payload = json.dumps({"category": "NORMAL"}).encode("utf-8")
+                    req = urllib.request.Request(url_reset, data=payload, headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=0.5):
+                        pass
+                except Exception:
+                    pass
             status_category = "NORMAL"
             alarm_event_name = ""
             alarm_score = 0.0
