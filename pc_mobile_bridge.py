@@ -238,10 +238,6 @@ body { padding: 16px; display: flex; flex-direction: column; justify-content: sp
 .stt-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
 .stt-final { font-size: 30px; font-weight: 900; color: #58a6ff; line-height: 1.35; min-height: 80px; word-break: break-word; text-shadow: 0 0 12px rgba(88, 166, 255, 0.3); }
 .stt-live { font-size: 22px; font-weight: 700; color: #e3b341; line-height: 1.35; margin-top: 16px; min-height: 36px; word-break: break-word; text-shadow: 0 0 10px rgba(227, 179, 65, 0.3); }
-.toggle-btn { border: none; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 800; cursor: pointer; transition: all 0.2s ease; }
-.btn-on { background: #238636; color: white; box-shadow: 0 0 12px rgba(35, 134, 54, 0.5); }
-.btn-off { background: #30363d; color: #8b949e; box-shadow: none; }
-
 @keyframes glow-gold { from { box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); } to { box-shadow: 0 0 30px rgba(245, 158, 11, 0.9); } }
 @keyframes glow-red { from { box-shadow: 0 0 10px rgba(248, 81, 73, 0.4); } to { box-shadow: 0 0 35px rgba(248, 81, 73, 1.0); } }
 </style>
@@ -251,15 +247,6 @@ body { padding: 16px; display: flex; flex-direction: column; justify-content: sp
 <!-- 車載 Header Bar -->
 <div class="top-bar">
   <div class="logo-title">🤖 POKONYAN ROBOT DISPLAY</div>
-</div>
-
-<!-- 👟 拖鞋自動追蹤功能開關按鈕卡片 -->
-<div class="toggle-card" style="background:#0d1117; border:1px solid #30363d; border-radius:16px; padding:14px 18px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-  <div>
-    <div style="font-size:15px; font-weight:800; color:#58a6ff;">👟 拖鞋自動追蹤功能</div>
-    <div style="font-size:11px; color:#8b949e; margin-top:2px;">聲響觸發後小車自動追蹤並撞擊拖鞋</div>
-  </div>
-  <button id="shoe-toggle-btn" class="toggle-btn btn-on" onclick="toggleShoeTracking()">已開啟 ON</button>
 </div>
 
 <!-- 🚨 車載警報與門鈴動態標誌位 (全屏霓虹發光) -->
@@ -279,34 +266,6 @@ body { padding: 16px; display: flex; flex-direction: column; justify-content: sp
 </div>
 
 <script>
-let shoeTrackingEnabled = true;
-
-async function toggleShoeTracking() {
-  shoeTrackingEnabled = !shoeTrackingEnabled;
-  updateShoeBtnUI(shoeTrackingEnabled);
-  try {
-    await fetch('/set_shoe_tracking', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: shoeTrackingEnabled })
-    });
-  } catch (e) {
-    console.log("Toggle error:", e);
-  }
-}
-
-function updateShoeBtnUI(enabled) {
-  const btn = document.getElementById('shoe-toggle-btn');
-  if (!btn) return;
-  if (enabled) {
-    btn.className = 'toggle-btn btn-on';
-    btn.textContent = '已開啟 ON';
-  } else {
-    btn.className = 'toggle-btn btn-off';
-    btn.textContent = '已關閉 OFF';
-  }
-}
-
 async function pollStatus() {
   try {
     const res = await fetch('/status');

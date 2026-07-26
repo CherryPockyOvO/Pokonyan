@@ -69,6 +69,11 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
         <button id="btn-auto" class="btn btn-mode active" onclick="setMode('AUTO')">🤖 AUTO Mode</button>
         <button id="btn-manual" class="btn btn-mode" onclick="setMode('MANUAL')">🎮 MANUAL Mode</button>
       </div>
+      <div class="label" style="margin-top:8px;">Shoe Tracking Feature (拖鞋自動追蹤)</div>
+      <div class="mode-btn-group">
+        <button id="btn-shoe-on" class="btn btn-mode active" onclick="setShoeTracking(true)">👟 追蹤開啟 ON</button>
+        <button id="btn-shoe-off" class="btn btn-mode" onclick="setShoeTracking(false)">🚫 追蹤關閉 OFF</button>
+      </div>
       <div class="wasd-pad">
         <button class="btn btn-wasd" id="key-wa" onclick="sendCmd('WA')">WA ↖</button>
         <button class="btn btn-wasd" id="key-w" onclick="sendCmd('W')">W ↑</button>
@@ -115,6 +120,18 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
 const show=(id,value)=>document.getElementById(id).textContent=value;
 let currentMode = "AUTO";
 
+async function setShoeTracking(enabled){
+  try{
+    await fetch('/set_shoe_tracking',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:enabled})
+    });
+    document.getElementById('btn-shoe-on').classList.toggle('active', enabled);
+    document.getElementById('btn-shoe-off').classList.toggle('active', !enabled);
+  }catch(e){console.error(e);}
+}
+
 async function poll(){
   try{
     const s=await (await fetch('/status',{cache:'no-store'})).json();
@@ -123,6 +140,10 @@ async function poll(){
     
     document.getElementById('btn-auto').classList.toggle('active', currentMode === 'AUTO');
     document.getElementById('btn-manual').classList.toggle('active', currentMode === 'MANUAL');
+    if (r.shoe_tracking_enabled !== undefined) {
+      document.getElementById('btn-shoe-on').classList.toggle('active', r.shoe_tracking_enabled);
+      document.getElementById('btn-shoe-off').classList.toggle('active', !r.shoe_tracking_enabled);
+    }
     
     show('state', `[${currentMode}] ` + (r.state||'IDLE'));
     show('reason', r.reason||'-');
