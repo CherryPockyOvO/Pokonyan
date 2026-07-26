@@ -46,44 +46,46 @@ except ImportError:
             from ai_edge_litert.interpreter import Interpreter
 
 # AudioSet class ontology mapping (Doorbell / Bell / Ring / Alarm / Environmental)
-DOORBELL_BELL_CLASSES = {
-    349: "Doorbell (門鈴)",
-    350: "Ding-dong (叮咚門鈴)",
-    173: "Bell (響鈴)",
-    195: "Church bell (教堂大鐘)",
-    196: "Jingle bell (叮噹鈴)",
-    197: "Bicycle bell (腳踏車車鈴)",
-    198: "Chime (風鈴/鐘聲)",
-    200: "Campanology (連環鐘聲)",
-    201: "Carillon (組鐘)",
-    202: "Tubular bells (管鐘)",
-    384: "Telephone bell ring (電話鈴聲)",
-    385: "Ringtone (手機響鈴)",
-    382: "Alarm (警報器)",
-    389: "Alarm clock (鬧鐘)",
-    390: "Siren (警笛/警報)",
-    391: "Smoke detector / Fire alarm (火災煙霧警報器)",
-    393: "Civil defense siren (防空警報)",
-    394: "Buzzer (蜂鳴器/電鈴)",
-    395: "Police siren (警車警笛)",
-    396: "Ambulance siren (救護車警笛)",
-    397: "Fire engine siren (消防車警笛)",
+DOORBELL_CLASSES = {
+    349: "doorbell",
+    350: "ding-dong",
+    173: "bell",
+    195: "church_bell",
+    196: "jingle_bell",
+    197: "bicycle_bell",
+    198: "chime",
+    200: "campanology",
+    201: "carillon",
+    202: "tubular_bells",
+    384: "telephone_ring",
+    385: "ringtone",
+}
+
+ALARM_CLASSES = {
+    382: "alarm",
+    389: "alarm_clock",
+    390: "siren",
+    391: "fire_alarm",
+    393: "civil_defense_siren",
+    394: "buzzer",
+    395: "police_siren",
+    396: "ambulance_siren",
+    397: "fire_engine_siren",
 }
 
 GENERAL_CLASSES = {
-    0: "Speech (說話聲)",
-    16: "Laughter (笑聲)",
-    45: "Cough (咳嗽聲)",
-    48: "Snore (打呼聲)",
-    51: "Whistling (吹口哨)",
-    57: "Applause (掌聲)",
-    74: "Dog bark (狗吠)",
-    81: "Cat meow (貓叫)",
-    137: "Music (音樂聲)",
+    0: "speech",
+    16: "laughter",
+    45: "cough",
+    48: "snore",
+    51: "whistling",
+    57: "applause",
+    74: "dog_bark",
+    81: "cat_meow",
+    137: "music",
 }
 
-# Merge all known maps
-ALL_CLASS_NAMES = {**DOORBELL_BELL_CLASSES, **GENERAL_CLASSES}
+ALL_CLASS_NAMES = {**DOORBELL_CLASSES, **ALARM_CLASSES, **GENERAL_CLASSES}
 
 def send_event_to_pi(pi_host, port, event, score):
     url = f"http://{pi_host}:{port}/trigger_audio_event"
@@ -96,11 +98,11 @@ def send_event_to_pi(pi_host, port, event, score):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Standalone YAMNet Doorbell Sound Classifier")
+    parser = argparse.ArgumentParser(description="Standalone YAMNet Doorbell & Alarm Sound Classifier")
     parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi IP (default: 100.80.242.72)")
     parser.add_argument("--port", type=int, default=8080, help="Raspberry Pi web server port (default: 8080)")
     parser.add_argument("--model", default="model/yamnet.tflite", help="Path to yamnet.tflite model")
-    parser.add_argument("--threshold", type=float, default=0.20, help="Doorbell detection confidence threshold (default: 0.20)")
+    parser.add_argument("--threshold", type=float, default=0.20, help="Detection threshold (default: 0.20)")
     args = parser.parse_args()
 
     model_path = os.path.abspath(args.model)
@@ -109,14 +111,13 @@ def main():
         model_path = os.path.join(base_dir, "model", "yamnet.tflite")
 
     print(f"{Fore.CYAN}========================================================{Style.RESET_ALL}")
-    print(f"{Fore.CYAN} 🔔 Standalone YAMNet Doorbell & Bell Sound Classifier  {Style.RESET_ALL}")
+    print(f"{Fore.CYAN} 🔔 Standalone YAMNet Doorbell & Alarm Sound Classifier  {Style.RESET_ALL}")
     print(f"{Fore.CYAN}========================================================{Style.RESET_ALL}")
     print(f"📦 YAMNet Model : {model_path}")
     print(f"📡 Target Pi    : http://{args.pi_host}:{args.port}/")
     print(f"🎯 Threshold    : {args.threshold:.2f}")
-    print(f"💡 No bandpass filters, pure raw microphone classification!\n")
+    print(f"💡 Three Categories: NORMAL | DOORBELL | ALARM\n")
 
-    # Initialize YAMNet TFLite Interpreter
     interp = Interpreter(model_path=model_path)
     input_details = interp.get_input_details()
     output_details = interp.get_output_details()
@@ -140,7 +141,7 @@ def main():
     stream = sd.InputStream(
         channels=1,
         samplerate=sample_rate,
-        blocksize=int(sample_rate * 0.25),  # Update every 0.25s
+        blocksize=int(sample_rate * 0.25),
         callback=audio_callback,
     )
 
@@ -152,44 +153,49 @@ def main():
     try:
         while True:
             time.sleep(0.25)
-            # Run YAMNet inference on raw audio_buffer
             interp.set_tensor(input_details[0]["index"], audio_buffer)
             interp.invoke()
             scores = interp.get_tensor(output_details[0]["index"])[0]
 
-            # Find top predicted classes
             top_indices = np.argsort(scores)[::-1][:3]
             top_class = top_indices[0]
             top_score = scores[top_class]
 
-            # Check if any doorbell/bell class index is triggered above threshold
-            bell_hits = []
-            for idx, label in DOORBELL_BELL_CLASSES.items():
+            # 1. Check ALARM category
+            alarm_hits = []
+            for idx, label in ALARM_CLASSES.items():
                 if idx < len(scores) and scores[idx] >= args.threshold:
-                    bell_hits.append((label, scores[idx], idx))
+                    alarm_hits.append((label, scores[idx]))
+
+            # 2. Check DOORBELL category
+            doorbell_hits = []
+            for idx, label in DOORBELL_CLASSES.items():
+                if idx < len(scores) and scores[idx] >= args.threshold:
+                    doorbell_hits.append((label, scores[idx]))
 
             now = time.monotonic()
-            top_label = ALL_CLASS_NAMES.get(top_class, f"AudioSet #{top_class}")
-            top_name = top_label.split()[0].lower()
+            top_name = ALL_CLASS_NAMES.get(top_class, f"class_{top_class}")
 
-            if bell_hits:
-                # Doorbell / Bell detected!
-                bell_hits.sort(key=lambda x: x[1], reverse=True)
-                best_label, best_score, best_idx = bell_hits[0]
-                best_name = best_label.split()[0].lower()
-
-                print(
-                    f"\r{Fore.YELLOW}🔔 [DOORBELL DETECTED] {best_label} "
-                    f"Confidence: {best_score:.2f} {Style.RESET_ALL}"
-                )
-
-                if now - last_trigger_time >= 0.5:
+            if alarm_hits:
+                alarm_hits.sort(key=lambda x: x[1], reverse=True)
+                name, score = alarm_hits[0]
+                print(f"\r{Fore.RED}🚨 [ALARM DETECTED] {name} ({score:.2f}) {Style.RESET_ALL}")
+                if now - last_trigger_time >= 0.4:
                     last_trigger_time = now
-                    send_event_to_pi(args.pi_host, args.port, best_name, best_score)
+                    send_event_to_pi(args.pi_host, args.port, name, score)
+
+            elif doorbell_hits:
+                doorbell_hits.sort(key=lambda x: x[1], reverse=True)
+                name, score = doorbell_hits[0]
+                print(f"\r{Fore.YELLOW}🔔 [DOORBELL DETECTED] {name} ({score:.2f}) {Style.RESET_ALL}")
+                if now - last_trigger_time >= 0.4:
+                    last_trigger_time = now
+                    send_event_to_pi(args.pi_host, args.port, name, score)
+
             else:
                 if top_score >= 0.15:
-                    print(f"\r[YAMNet Live] Top sound: {top_label} ({top_score:.2f})      ", end="", flush=True)
-                    if now - last_trigger_time >= 0.5:
+                    print(f"\r[YAMNet Live] Sound: {top_name} ({top_score:.2f})      ", end="", flush=True)
+                    if now - last_trigger_time >= 0.4:
                         last_trigger_time = now
                         send_event_to_pi(args.pi_host, args.port, top_name, top_score)
 

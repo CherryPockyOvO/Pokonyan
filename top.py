@@ -142,26 +142,40 @@ def main():
     latest_audio_score = 0.0
     latest_audio_ts = 0.0
 
-    alarm_flag = False
+    status_category = "NORMAL"  # NORMAL | DOORBELL | ALARM
     alarm_event_name = ""
     alarm_score = 0.0
     alarm_ts = 0.0
 
     def audio_event(event, score):
         nonlocal latest_audio_event, latest_audio_score, latest_audio_ts
-        nonlocal alarm_flag, alarm_event_name, alarm_score, alarm_ts
+        nonlocal status_category, alarm_event_name, alarm_score, alarm_ts
         now = time.time()
         latest_audio_event = event
         latest_audio_score = score
         latest_audio_ts = now
 
-        is_bell = any(k in event.lower() for k in ["alarm", "bell", "ring", "siren", "doorbell", "ding-dong", "chime"])
-        if is_bell:
-            alarm_flag = True
+        event_clean = event.lower().strip()
+        is_alarm = any(k in event_clean for k in ["alarm", "siren", "buzzer", "detector", "fire", "police", "ambulance"])
+        is_doorbell = any(k in event_clean for k in ["doorbell", "ding-dong", "bell", "chime", "ring", "ringtone", "jingle", "bicycle", "carillon"])
+
+        if is_alarm:
+            status_category = "ALARM"
             alarm_event_name = event
             alarm_score = score
             alarm_ts = now
-            print(f"[Top <- YAMNet] 🔔 DOORBELL/ALARM TRIGGERED: '{event}' ({score:.2f})")
+            print(f"[Top <- YAMNet] 🚨 [ALARM DETECTED]: '{event}' ({score:.2f})")
+            if system_ready():
+                accepted = manager.trigger_alarm(event, score)
+                print(f"[Top] Mission accepted: {accepted}")
+            else:
+                print("[Top] Mission ignored: vision or Arduino is not ready")
+        elif is_doorbell:
+            status_category = "DOORBELL"
+            alarm_event_name = event
+            alarm_score = score
+            alarm_ts = now
+            print(f"[Top <- YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
             if system_ready():
                 accepted = manager.trigger_alarm(event, score)
                 print(f"[Top] Mission accepted: {accepted}")
@@ -208,15 +222,17 @@ def main():
         live_event = latest_audio_event if (now - latest_audio_ts <= 2.5) else "-"
         live_score = latest_audio_score if (now - latest_audio_ts <= 2.5) else 0.0
 
-        # Auto-reset alarm flag after 5.0s of no bell sound
-        active_alarm = alarm_flag if (now - alarm_ts <= 5.0) else False
+        # Auto-reset category back to NORMAL after 5.0s of no alarm/doorbell
+        active_category = status_category if (now - alarm_ts <= 5.0) else "NORMAL"
+        active_event = alarm_event_name if active_category != "NORMAL" else ""
+        active_score = alarm_score if active_category != "NORMAL" else 0.0
 
         audio_stat = {} if audio is None else audio.get_status()
+        audio_stat["category"] = active_category
+        audio_stat["alarm_event"] = active_event
+        audio_stat["alarm_score"] = active_score
         audio_stat["event"] = live_event
         audio_stat["event_score"] = live_score
-        audio_stat["alarm_flag"] = active_alarm
-        audio_stat["alarm_event"] = alarm_event_name if active_alarm else ""
-        audio_stat["alarm_score"] = alarm_score if active_alarm else 0.0
 
         if latest_transcript:
             audio_stat["text"] = latest_transcript

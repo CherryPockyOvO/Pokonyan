@@ -35,6 +35,7 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
 .btn-brake{background:#8b949e;color:#0d1117}
 .btn-brake:active,.btn-brake.active{background:#ff7b72;color:white}
 .wasd-hint{font-size:11px;color:#8b949e;text-align:center;margin-top:4px}
+.doorbell-banner{background:#d97706;color:#ffffff;padding:3px 8px;border-radius:4px;font-weight:bold;display:inline-block;animation:alert-pulse 0.8s infinite alternate}
 .red-alert-banner{background:#da3633;color:#ffffff;padding:3px 8px;border-radius:4px;font-weight:bold;display:inline-block;animation:alert-pulse 0.8s infinite alternate}
 @keyframes alert-pulse{from{opacity:0.8;transform:scale(0.98)}to{opacity:1;transform:scale(1.02)}}
 .flex-row{display:flex;gap:12px;justify-content:space-between}
@@ -94,8 +95,8 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
     </section>
 
     <section class="card">
-      <div class="label">Doorbell Alarm Status (Flag 門鈴觸發標誌位)</div>
-      <div id="alarm_flag_box" class="value"><span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Alarm)</span></div>
+      <div class="label">Doorbell / Alarm Status (Flag 標誌位)</div>
+      <div id="alarm_flag_box" class="value"><span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Event)</span></div>
       
       <div class="label">Realtime Sound Classification (實時聲音分類)</div>
       <div id="event" class="value" style="color:#58a6ff;">-</div>
@@ -134,10 +135,16 @@ async function poll(){
     show('arduino', m.ready ? 'CONNECTED' : (m.connected ? 'WAITING' : 'OFFLINE'));
     
     const flagBox = document.getElementById('alarm_flag_box');
-    if (a.alarm_flag) {
-      flagBox.innerHTML = `<span class="red-alert-banner">🚨 DOORBELL ALARM TRIGGERED (${(a.alarm_event||'BELL').toUpperCase()}) 🚨</span>`;
+    const cat = a.category || 'NORMAL';
+    const evtName = (a.alarm_event || '').toUpperCase();
+    const evtScore = (a.alarm_score || 0).toFixed(2);
+
+    if (cat === 'ALARM') {
+      flagBox.innerHTML = `<span class="red-alert-banner">🚨 ALARM DETECTED (${evtName} / ${evtScore}) 🚨</span>`;
+    } else if (cat === 'DOORBELL') {
+      flagBox.innerHTML = `<span class="doorbell-banner">🔔 DOORBELL DETECTED (${evtName} / ${evtScore}) 🔔</span>`;
     } else {
-      flagBox.innerHTML = `<span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Alarm)</span>`;
+      flagBox.innerHTML = `<span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Event)</span>`;
     }
 
     const eventBox = document.getElementById('event');
