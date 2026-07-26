@@ -44,11 +44,16 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def stream_output(process, prefix, color):
-    for line in iter(process.stdout.readline, ''):
-        if line:
-            line_str = line.strip()
-            if line_str:
-                print(f"{color}[{prefix}]{COLOR_RESET} {line_str}")
+    while True:
+        line_bytes = process.stdout.readline()
+        if not line_bytes:
+            break
+        try:
+            line_str = line_bytes.decode('utf-8').strip()
+        except Exception:
+            line_str = line_bytes.decode('gbk', errors='ignore').strip()
+        if line_str:
+            print(f"{color}[{prefix}]{COLOR_RESET} {line_str}")
 
 def run_ssh_paramiko(host, user, password, command, prefix, color, stop_event):
     ssh = paramiko.SSHClient()
@@ -56,7 +61,7 @@ def run_ssh_paramiko(host, user, password, command, prefix, color, stop_event):
     try:
         print(f"{color}[{prefix}]{COLOR_RESET} Connecting to {user}@{host} with auto-login (Password: ******)...")
         ssh.connect(hostname=host, username=user, password=password, timeout=10)
-        print(f"{color}[{prefix}]{COLOR_RESET} 🔑 SSH Login Successful! Launching top.py...")
+        print(f"{color}[{prefix}]{COLOR_RESET} SSH Login Successful! Launching top.py...")
 
         channel = ssh.get_transport().open_session()
         channel.get_pty()
@@ -91,11 +96,11 @@ def main():
     args = parser.parse_args()
 
     print(f"{COLOR_SYS}========================================================{COLOR_RESET}")
-    print(f"{COLOR_SYS} 🤖 Pokonyan Single-Terminal Dashboard (Auto-Login SSH)  {COLOR_RESET}")
+    print(f"{COLOR_SYS} Pokonyan Single-Terminal Dashboard (Auto-Login SSH)  {COLOR_RESET}")
     print(f"{COLOR_SYS}========================================================{COLOR_RESET}")
-    print(f"📡 Target Raspberry Pi: http://{args.pi_host}:8080/")
-    print(f"🔑 SSH Auto-Login    : {args.pi_user}@{args.pi_host} (Password: {args.pi_pass})")
-    print(f"💡 All 3 nodes running in this SINGLE terminal window!\n")
+    print(f"Target Raspberry Pi: http://{args.pi_host}:8080/")
+    print(f"SSH Auto-Login    : {args.pi_user}@{args.pi_host} (Password: {args.pi_pass})")
+    print(f"All 3 nodes running in this SINGLE terminal window!\n")
 
     cpp_dir = os.path.join(BASE_DIR, "cpp_audio_client")
     cpp_exe = os.path.join(cpp_dir, "build", "Release", "cpp_audio_client.exe")
@@ -106,7 +111,7 @@ def main():
 
     # Node 1: Raspberry Pi SSH Auto-Login thread
     pi_cmd = "cd ~/Pokonyan && git fetch origin main && git reset --hard origin/main && python3 top.py --no-audio"
-    t1 = threading.Thread(target=run_ssh_paramiko, args=(args.pi_host, args.pi_user, args.pi_pass, pi_cmd, "🤖 Pi", COLOR_PI, stop_event), daemon=True)
+    t1 = threading.Thread(target=run_ssh_paramiko, args=(args.pi_host, args.pi_user, args.pi_pass, pi_cmd, "Pi", COLOR_PI, stop_event), daemon=True)
     t1.start()
 
     # Node 2: C++ GPU STT Client
@@ -115,15 +120,17 @@ def main():
     else:
         cmd_cpp = ["cmd.exe", "/c", f"cd /d {cpp_dir} && call build_and_run.bat {args.pi_host}"]
 
-    p2 = subprocess.Popen(cmd_cpp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=cpp_dir)
-    t2 = threading.Thread(target=stream_output, args=(p2, "⚡ C++ GPU", COLOR_CPP), daemon=True)
+    p2 = subprocess.Popen(cmd_cpp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=cpp_dir)
+    t2 = threading.Thread(target=stream_output, args=(p2, "C++ GPU", COLOR_CPP), daemon=True)
     t2.start()
     procs.append(p2)
 
     # Node 3: Python YAMNet Classifier
     cmd_yamnet = [sys.executable, os.path.join(BASE_DIR, "pc_audio_client.py"), "--pi-host", args.pi_host]
-    p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=BASE_DIR)
-    t3 = threading.Thread(target=stream_output, args=(p3, "🔔 YAMNet", COLOR_YAMNET), daemon=True)
+    p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
+    t3 = threading.Thread(target=stream_output, args=(p3, "YAMNet", COLOR_YAMNET), daemon=True)
+    t3.start()
+    procs.append(p3)
     t3.start()
     procs.append(p3)
 
