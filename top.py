@@ -375,9 +375,14 @@ def main():
             marker = (current["mode"], auto_state, current["reason"], command, bumper_pressed)
             if marker != previous:
                 print(
-                    f"\n[8080 Terminal] 🤖 Mode: {current['mode']} | Bumper: {bumper_str} | Status: {seeking_str}\n"
-                    f"                Reason: {current['reason']}\n"
-                    f"                Motor PWM: L={command[0]} / R={command[1]}\n"
+                    f"\n======================================================\n"
+                    f"[8080 Terminal Status]\n"
+                    f"  🤖 控制模式 (Mode)     : {current['mode']}\n"
+                    f"  💥 碰撞狀態 (Bumper)   : {bumper_str}\n"
+                    f"  🔍 拖鞋追蹤 (Tracking) : {seeking_str}\n"
+                    f"  📝 決策原因 (Reason)   : {current['reason']}\n"
+                    f"  ⚙️ 馬達輸出 (Motor PWM): L={command[0]} / R={command[1]}\n"
+                    f"======================================================\n"
                 )
                 previous = marker
     finally:
