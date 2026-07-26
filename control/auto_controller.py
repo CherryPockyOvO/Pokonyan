@@ -19,6 +19,7 @@ class AutoController:
         self.alert_score = 0.0
         self.scan_steps = 0
         self.last_seen_target_time = 0.0
+        self.standby_since = 0.0
         self.command = (0, 0)
         self.reason = "waiting for alarm (AUTO mode)"
 
@@ -106,19 +107,19 @@ class AutoController:
             bumper_pressed = motor_status.get("bumper_pressed", False)  # True if B1, False if B0
 
             # -------------------------------------------------------------
-            # 1. 撞到鞋子狀態 (HIT_SHOE): 先左轉 3 秒，再原地停止，然後重新啟動
+            # 1. 撞到鞋子狀態 (HIT_SHOE): 右轉 3 秒後重新啟動巡航
             # -------------------------------------------------------------
             if self.state == "HIT_SHOE":
                 if elapsed < 3.0:
                     remaining = 3.0 - elapsed
-                    self.command = (-240, 240)
-                    self.reason = f"👟 Shoe hit! Turning left 3s ({remaining:.1f}s remaining)..."
+                    self.command = (240, -240)
+                    self.reason = f"👟 Shoe hit! Turning right 3s ({remaining:.1f}s remaining)..."
                     return self.command
                 else:
-                    # 3 秒左轉完成：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL，原地停止
+                    # 3 秒右轉完成：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL
                     self.alert = ""
                     self.alert_score = 0.0
-                    self._transition("IDLE", now, "3s left turn after shoe hit complete -> Resuming ordinary AUTO wander")
+                    self._transition("IDLE", now, "3s right turn after shoe hit complete -> Resuming ordinary AUTO wander")
                     self.pet_wander.reset()
                     self.shoe_tracker.reset()
                     return (0, 0)
@@ -127,18 +128,26 @@ class AutoController:
             # 2. 聲響觸發後的拖鞋追蹤狀態 (TRACKING_SHOE)
             # -------------------------------------------------------------
             if self.state == "TRACKING_SHOE":
-                # A) 碰撞檢測：撞擊鞋子 (觸發微動開關 B1) 即進入 2 秒停留
+                # A) 碰撞檢測：撞擊鞋子 (觸發微動開關 B1) 即進入右轉 3 秒
                 if bumper_pressed:
-                    self._transition("HIT_SHOE", now, "👟 Shoe collision! (B1 bumper pressed) -> Holding 2s.")
-                    self.command = (0, 0)
+                    self._transition("HIT_SHOE", now, "👟 Shoe collision! (B1 bumper pressed) -> Turning right 3s.")
+                    self.command = (240, -240)
                     return self.command
 
-                # B) 抵達鞋子前 (45cm 超聲波內) 靜止等待 B1 撞擊特判：100% 嚴格鎖定靜止 (0, 0)，絕不上前或旋轉！
+                # B) 抵達鞋子前 (超聲波 <=45cm)：先左轉 3 秒，再原地停止等待 B1 撞擊
                 if self.shoe_tracker.arrived_at_shoe_standby:
-                    cmd, track_reason = self.shoe_tracker.tick(target, distance)
-                    self.command = (0, 0)
-                    self.reason = f"[Waiting B1 Bump] {track_reason}"
-                    return self.command
+                    standby_elapsed = now - self.shoe_tracker.standby_since
+                    if standby_elapsed < 3.0:
+                        # 階段 B-1：原地左轉 3 秒
+                        remaining = 3.0 - standby_elapsed
+                        self.command = (-240, 240)
+                        self.reason = f"🔄 Arrived at shoe -> Turning left 3s ({remaining:.1f}s remaining) before waiting B1"
+                        return self.command
+                    else:
+                        # 階段 B-2：左轉完成，原地停止 (0, 0) 等待 B1 撞擊
+                        self.command = (0, 0)
+                        self.reason = "🛑 Left turn complete -> Stopped (0, 0), waiting for B1 bumper collision"
+                        return self.command
 
                 # C) 發現鞋子特判：在任何時刻（含 6 次旋轉掃描期間）只要發現鞋子，立刻中止旋轉掃描，直接追蹤！
                 if target is not None:

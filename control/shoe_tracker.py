@@ -40,6 +40,7 @@ class ShoeTrackerController:
         self.smoothed_dx = 0.0
         self.has_smoothed = False
         self.arrived_at_shoe_standby = False
+        self.standby_since = 0.0
 
         # 脈衝步進轉向狀態機 (Pulse Step Steering State)
         self.pulse_state = "IDLE"  # "IDLE", "PULSING", "PAUSING"
@@ -55,6 +56,7 @@ class ShoeTrackerController:
             self.has_smoothed = False
             if full_reset:
                 self.arrived_at_shoe_standby = False
+                self.standby_since = 0.0
             self.pulse_state = "IDLE"
             self.pulse_cmd = (0, 0)
             self.pulse_until = 0.0
@@ -94,9 +96,11 @@ class ShoeTrackerController:
             # 階段 1: 當超聲波距離小於 45cm，自動停下 (0, 0) 嚴格鎖定等待 B1 撞擊
             # -------------------------------------------------------------
             if valid_dist and distance_cm <= 45.0:
-                self.arrived_at_shoe_standby = True
+                if not self.arrived_at_shoe_standby:
+                    self.arrived_at_shoe_standby = True
+                    self.standby_since = time.monotonic()
                 self.pulse_state = "IDLE"
-                self.reason = f"🛑 Arrived at shoe (Ultrasonic: {distance_cm:.1f}cm <= 45cm): Strictly locked (0, 0), waiting for B1 bumper collision"
+                self.reason = f"🛑 Arrived at shoe (Ultrasonic: {distance_cm:.1f}cm <= 45cm): Standby triggered"
                 return (0, 0), self.reason
 
             # -------------------------------------------------------------
