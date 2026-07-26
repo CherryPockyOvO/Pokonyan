@@ -94,10 +94,15 @@ img{width:100%;max-height:410px;object-fit:contain;background:#000;border:1px so
     </section>
 
     <section class="card">
-      <div class="label">Sound Classification (YAMNet Fusion)</div>
-      <div id="event" class="value">-</div>
+      <div class="label">Doorbell Alarm Status (Flag 門鈴觸發標誌位)</div>
+      <div id="alarm_flag_box" class="value"><span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Alarm)</span></div>
+      
+      <div class="label">Realtime Sound Classification (實時聲音分類)</div>
+      <div id="event" class="value" style="color:#58a6ff;">-</div>
+      
       <div class="label">Last Completed Sentence (Final STT)</div>
       <div id="transcript" class="value" style="color:#7ee787">-</div>
+      
       <div class="label">Realtime Live Recognition (Streaming Draft)</div>
       <div id="live_transcript" class="value" style="color:#e3b341">-</div>
       <div id="error"></div>
@@ -128,14 +133,16 @@ async function poll(){
     show('distance', m.distance_cm == null ? '-' : m.distance_cm.toFixed(1) + ' cm');
     show('arduino', m.ready ? 'CONNECTED' : (m.connected ? 'WAITING' : 'OFFLINE'));
     
+    const flagBox = document.getElementById('alarm_flag_box');
+    if (a.alarm_flag) {
+      flagBox.innerHTML = `<span class="red-alert-banner">🚨 DOORBELL ALARM TRIGGERED (${(a.alarm_event||'BELL').toUpperCase()}) 🚨</span>`;
+    } else {
+      flagBox.innerHTML = `<span style="color:#7ee787;font-weight:bold;">🟢 NORMAL (No Alarm)</span>`;
+    }
+
     const eventBox = document.getElementById('event');
-    if (a.event) {
-      const isAlarm = /alarm|bell|ring|siren|doorbell/i.test(a.event);
-      if (isAlarm) {
-        eventBox.innerHTML = `<span class="red-alert-banner">🚨 ${a.event.toUpperCase()} (${(a.event_score??0).toFixed(2)}) 🚨</span>`;
-      } else {
-        eventBox.innerHTML = `<span style="color:#58a6ff;font-weight:bold;">🎵 ${a.event} (${(a.event_score??0).toFixed(2)})</span>`;
-      }
+    if (a.event && a.event !== '-') {
+      eventBox.innerHTML = `<span style="color:#58a6ff;font-weight:bold;">🎵 ${a.event} (${(a.event_score??0).toFixed(2)})</span>`;
     } else {
       eventBox.textContent = '-';
     }

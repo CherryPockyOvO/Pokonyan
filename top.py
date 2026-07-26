@@ -137,23 +137,38 @@ def main():
 
     latest_transcript = ""
     latest_live_transcript = ""
-    latest_audio_event = ""
+
+    latest_audio_event = "-"
     latest_audio_score = 0.0
-    latest_audio_time = ""
+    latest_audio_ts = 0.0
+
+    alarm_flag = False
+    alarm_event_name = ""
+    alarm_score = 0.0
+    alarm_ts = 0.0
 
     def audio_event(event, score):
-        nonlocal latest_audio_event, latest_audio_score, latest_audio_time
-        ts = time.strftime("%H:%M:%S")
+        nonlocal latest_audio_event, latest_audio_score, latest_audio_ts
+        nonlocal alarm_flag, alarm_event_name, alarm_score, alarm_ts
+        now = time.time()
         latest_audio_event = event
         latest_audio_score = score
-        latest_audio_time = ts
-        print(f"[Top <- YAMNet] Real-time sound event: '{event}' ({score:.2f})")
-        if event in ("alarm", "alarm_clock", "bell", "doorbell", "ring", "siren"):
+        latest_audio_ts = now
+
+        is_bell = any(k in event.lower() for k in ["alarm", "bell", "ring", "siren", "doorbell", "ding-dong", "chime"])
+        if is_bell:
+            alarm_flag = True
+            alarm_event_name = event
+            alarm_score = score
+            alarm_ts = now
+            print(f"[Top <- YAMNet] 🔔 DOORBELL/ALARM TRIGGERED: '{event}' ({score:.2f})")
             if system_ready():
                 accepted = manager.trigger_alarm(event, score)
                 print(f"[Top] Mission accepted: {accepted}")
             else:
                 print("[Top] Mission ignored: vision or Arduino is not ready")
+        else:
+            print(f"[Top <- YAMNet] Real-time sound: '{event}' ({score:.2f})")
 
     def transcribe_text(text, is_live=False):
         nonlocal latest_transcript, latest_live_transcript
@@ -188,15 +203,26 @@ def main():
             motor.emergency_stop()
 
     def status():
+        now = time.time()
+        # Auto-reset live event if no update for 2.5s
+        live_event = latest_audio_event if (now - latest_audio_ts <= 2.5) else "-"
+        live_score = latest_audio_score if (now - latest_audio_ts <= 2.5) else 0.0
+
+        # Auto-reset alarm flag after 5.0s of no bell sound
+        active_alarm = alarm_flag if (now - alarm_ts <= 5.0) else False
+
         audio_stat = {} if audio is None else audio.get_status()
+        audio_stat["event"] = live_event
+        audio_stat["event_score"] = live_score
+        audio_stat["alarm_flag"] = active_alarm
+        audio_stat["alarm_event"] = alarm_event_name if active_alarm else ""
+        audio_stat["alarm_score"] = alarm_score if active_alarm else 0.0
+
         if latest_transcript:
             audio_stat["text"] = latest_transcript
         if latest_live_transcript:
             audio_stat["live_text"] = latest_live_transcript
-        if latest_audio_event:
-            audio_stat["event"] = latest_audio_event
-            audio_stat["event_score"] = latest_audio_score
-            audio_stat["event_time"] = latest_audio_time
+
         return {
             "robot": manager.get_status(),
             "vision": {} if detector is None else detector.get_status(),

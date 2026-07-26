@@ -169,27 +169,29 @@ def main():
                     bell_hits.append((label, scores[idx], idx))
 
             now = time.monotonic()
+            top_label = ALL_CLASS_NAMES.get(top_class, f"AudioSet #{top_class}")
+            top_name = top_label.split()[0].lower()
+
             if bell_hits:
                 # Doorbell / Bell detected!
                 bell_hits.sort(key=lambda x: x[1], reverse=True)
                 best_label, best_score, best_idx = bell_hits[0]
+                best_name = best_label.split()[0].lower()
 
                 print(
                     f"\r{Fore.YELLOW}🔔 [DOORBELL DETECTED] {best_label} "
                     f"Confidence: {best_score:.2f} {Style.RESET_ALL}"
                 )
 
-                if now - last_trigger_time >= 1.0:
+                if now - last_trigger_time >= 0.5:
                     last_trigger_time = now
-                    # Normalize event name string for Pi
-                    event_name = best_label.split()[0].lower()
-                    print(f"  └─ 🚀 Pushing RED ALERT to Raspberry Pi: '{event_name}' ({best_score:.2f})")
-                    send_event_to_pi(args.pi_host, args.port, event_name, best_score)
+                    send_event_to_pi(args.pi_host, args.port, best_name, best_score)
             else:
-                # Real-time top sound output display
-                top_label = ALL_CLASS_NAMES.get(top_class, f"AudioSet #{top_class}")
                 if top_score >= 0.15:
                     print(f"\r[YAMNet Live] Top sound: {top_label} ({top_score:.2f})      ", end="", flush=True)
+                    if now - last_trigger_time >= 0.5:
+                        last_trigger_time = now
+                        send_event_to_pi(args.pi_host, args.port, top_name, top_score)
 
     except KeyboardInterrupt:
         print("\nStopping YAMNet Classifier...")
