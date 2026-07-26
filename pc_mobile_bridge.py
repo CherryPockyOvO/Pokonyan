@@ -447,6 +447,35 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"ok": true}')
             return
 
+        if self.path == "/trigger_audio_event":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode("utf-8"))
+                event = data.get("event", "").strip()
+                score = float(data.get("score", 0.0))
+                now = time.monotonic()
+                if event:
+                    if event in list(ALARM_CLASSES.values()):
+                        latest_audio_status["category"] = "ALARM"
+                        latest_audio_status["alarm_event"] = event
+                        latest_audio_status["alarm_score"] = score
+                    elif event in list(DOORBELL_CLASSES.values()):
+                        latest_audio_status["category"] = "DOORBELL"
+                        latest_audio_status["alarm_event"] = event
+                        latest_audio_status["alarm_score"] = score
+                    latest_audio_status["event"] = event
+                    latest_audio_status["event_score"] = score
+                    latest_audio_status["last_event_time"] = now
+            except Exception:
+                pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+            return
+
         if self.path == "/stream_pcm":
             content_length = int(self.headers.get("Content-Length", 0))
             pcm_bytes = self.rfile.read(content_length)
@@ -759,23 +788,20 @@ def main():
                 protocol = "http"
                 ctx = None
 
-    # Start secondary dedicated display server on port 5001
-    start_display_server_5001(ssl_context=ctx)
-
     ips = get_all_ip_addresses()
 
     print(f"========================================================")
-    print(f" 📱 Pokonyan Dual-Port Audio & Display Server Running  ")
+    print(f" 📱 Pokonyan Mobile Mic & Robot Car Display Server      ")
     print(f"========================================================")
     print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
-    print(f"🎙️ 埠號 5000 (超簡潔麥克風串流端):")
+    print(f"🎙️ 麥克風串流端網址 (僅需授權麥克風權限):")
     for ip in ips:
         if ip.startswith("100."):
-            print(f"   👉 {protocol}://{ip}:5000/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
-    print(f"\n📺 埠號 5001 (專門 iPhone 車載螢幕展示端):")
+            print(f"   👉 {protocol}://{ip}:5000/   ⭐ (Tailscale 虛擬網段 IP)")
+    print(f"\n📺 專門 iPhone 車載顯示屏網址 (動態警報與大字體語句):")
     for ip in ips:
         if ip.startswith("100."):
-            print(f"   👉 {protocol}://{ip}:5001/   ⭐【車載螢幕推薦】(或開 5000/display)")
+            print(f"   👉 {protocol}://{ip}:5000/display   ⭐【車載螢幕推薦】")
     print(f"========================================================\n")
 
     try:
