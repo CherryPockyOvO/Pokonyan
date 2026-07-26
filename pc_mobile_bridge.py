@@ -441,12 +441,26 @@ def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
 
     return cert_file, key_file
 
+import socket
+
+def get_all_ip_addresses():
+    ip_list = []
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith("127."):
+                ip_list.append(ip)
+    except Exception:
+        pass
+    return ip_list
+
 def main():
     parser = argparse.ArgumentParser(description="PC Mobile Audio Bridge Server")
     parser.add_argument("--port", type=int, default=5000, help="PC Mobile Web server port (default: 5000)")
     parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi IP (default: 100.80.242.72)")
     parser.add_argument("--pi-port", type=int, default=8080, help="Raspberry Pi web port (default: 8080)")
     parser.add_argument("--model", default="model/yamnet.tflite", help="Path to yamnet.tflite model")
+    parser.add_argument("--no-ssl", action="store_true", help="Disable HTTPS SSL and run on pure HTTP")
     args = parser.parse_args()
 
     model_path = os.path.abspath(args.model)
@@ -458,22 +472,29 @@ def main():
     yamnet_thread = threading.Thread(target=run_mobile_yamnet, args=(args.pi_host, args.pi_port, model_path, 0.20), daemon=True)
     yamnet_thread.start()
 
-    cert_file, key_file = ensure_ssl_cert()
     server = ThreadedHTTPServer(("0.0.0.0", args.port), MobileBridgeHandler)
 
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
-        server.socket = ctx.wrap_socket(server.socket, server_side=True)
-        protocol = "https"
+    if not args.no_ssl:
+        cert_file, key_file = ensure_ssl_cert()
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+            server.socket = ctx.wrap_socket(server.socket, server_side=True)
+            protocol = "https"
+        else:
+            protocol = "http"
     else:
         protocol = "http"
+
+    ips = get_all_ip_addresses()
 
     print(f"========================================================")
     print(f" 📱 Pokonyan Mobile Mic & Control Bridge Server Started!")
     print(f"========================================================")
-    print(f"🌐 iPhone / Mobile URL: {protocol}://<PC_IP>:{args.port}/ (e.g. {protocol}://100.103.37.56:{args.port}/)")
-    print(f"📡 Target Pi         : http://{args.pi_host}:{args.pi_port}/")
+    print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
+    print(f"🌐 iPhone Safari URLs (Try in order on iPhone 17 Pro Max):")
+    for ip in ips:
+        print(f"   👉 {protocol}://{ip}:{args.port}/")
     print(f"🎙️ Open {protocol}:// in Safari on iPhone 17 Pro Max to grant mic!\n")
 
     try:
