@@ -83,7 +83,7 @@ class ShoeTrackerController:
             valid_dist = distance_cm is not None and distance_cm > 0.0
 
             # -------------------------------------------------------------
-            # 2. 抵達鞋子特判：不煞車，持續前進 (200, 200) 反覆去撞鞋子！
+            # 2. 抵達鞋子特判：持續前進 (165, 165)
             # -------------------------------------------------------------
             is_at_shoe = (
                 (valid_dist and distance_cm <= self.stop_dist_cm)
@@ -92,7 +92,7 @@ class ShoeTrackerController:
             if is_at_shoe:
                 dist_str = f"{distance_cm:.1f}cm" if valid_dist else "N/A"
                 self.reason = f"💥 Bumping into shoe repeatedly! (Distance: {dist_str}, Height: {height_ratio*100:.1f}%)"
-                return (200, 200), self.reason
+                return (165, 165), self.reason
 
             # -------------------------------------------------------------
             # 3. 雙階段自適應追蹤演算法 (Dual-Stage Adaptive Steering)
@@ -100,28 +100,21 @@ class ShoeTrackerController:
             is_far_target = height_ratio < 0.25  # 鞋子較小 / 較遠 (畫面高度佔比 < 25%)
 
             if is_far_target:
-                # ---------------------------------------------------------
-                # 階段 A: 遠距離 / 小目標 (Height < 25%)
-                # 完全使用平滑弧線組合鍵 (WA: 90, 240 / WD: 240, 90) 進行追蹤！
-                # 避免遠距離原地旋轉導致畫面跳動與車身左右晃動！
-                # ---------------------------------------------------------
                 self.pulse_state = "IDLE"  # 遠距離使用連續平滑弧線
                 if abs(dx) <= self.deadband_px:
-                    cmd = (200, 200)
+                    cmd = (165, 165)
                     self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 elif dx < 0:
-                    cmd = (90, 240)  # 左前弧線 WA
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 90, 240, dx={dx:.1f})"
+                    cmd = (60, 165)  # 左前弧線 WA
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Left (WA: 60, 165, dx={dx:.1f})"
                 else:
-                    cmd = (240, 90)  # 右前弧線 WD
-                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 240, 90, dx={dx:.1f})"
+                    cmd = (165, 60)  # 右前弧線 WD
+                    self.reason = f"🎯 Far Tracking (Height {height_ratio*100:.0f}%): Curved Right (WD: 165, 60, dx={dx:.1f})"
                 return cmd, self.reason
 
             # ---------------------------------------------------------
             # 階段 B: 近距離 / 大目標 (Height >= 25%)
-            # 使用步進式小幅度脈衝原地旋轉/弧線 (Step Pulse) 進行精確對準
             # ---------------------------------------------------------
-            # A) 處理步進脈衝中的動作 (PULSING)
             if self.pulse_state == "PULSING":
                 if now < self.pulse_until:
                     return self.pulse_cmd, self.reason
@@ -130,32 +123,29 @@ class ShoeTrackerController:
                     self.pause_until = now + self.pulse_pause_sec
                     return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
 
-            # B) 處理步進脈衝間隔停頓 (PAUSING)
             if self.pulse_state == "PAUSING":
                 if now < self.pause_until:
                     return (0, 0), "🎯 Near Tracking: Steering pulse pause (reading frame)"
                 else:
                     self.pulse_state = "IDLE"
 
-            # C) 精確對準中心 (±30px 死區) -> 全速直向前進 (200, 200)
             if abs(dx) <= self.deadband_px:
-                cmd = (200, 200)
+                cmd = (165, 165)
                 self.reason = f"🎯 Near Tracking (Height {height_ratio*100:.0f}%): Centered (dx={dx:.1f}) -> Drive Forward"
                 return cmd, self.reason
 
-            # D) 觸發新的小幅度步進轉向脈衝 (0.15s 強力轉向 + 0.10s 觀察)
             if dx < -90.0:
-                cmd = (-160, 165)
-                act_name = "Step Spin Left (-160, 165)"
+                cmd = (-135, 140)
+                act_name = "Step Spin Left (-135, 140)"
             elif dx < -self.deadband_px:
-                cmd = (90, 240)
-                act_name = "Step Curve Left (90, 240)"
+                cmd = (60, 165)
+                act_name = "Step Curve Left (60, 165)"
             elif dx > 90.0:
-                cmd = (175, -175)
-                act_name = "Step Spin Right (175, -175)"
+                cmd = (140, -135)
+                act_name = "Step Spin Right (140, -135)"
             else:
-                cmd = (240, 90)
-                act_name = "Step Curve Right (240, 90)"
+                cmd = (165, 60)
+                act_name = "Step Curve Right (165, 60)"
 
             self.pulse_state = "PULSING"
             self.pulse_cmd = cmd

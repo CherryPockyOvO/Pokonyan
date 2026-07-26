@@ -124,43 +124,45 @@ class AutoController:
                     return (0, 0)
 
             # -------------------------------------------------------------
-            # 2. 警報/門鈴觸發後的追蹤鞋子狀態 (TRACKING_SHOE)
+            # 2. 判斷是否關閉避障（當視野中有鞋子 OR 已經看到大面積鞋子的標誌位觸發）
             # -------------------------------------------------------------
-            if self.state == "TRACKING_SHOE":
-                # A) 檢測鏡頭中是否出現過大鞋子（先決條件）
-                if target is not None:
-                    h_ratio = target.get("height_ratio", 0.0)
-                    w_ratio = target.get("width_ratio", 0.0)
-                    if h_ratio >= 0.35 or (w_ratio * h_ratio) >= 0.12:
-                        if not self.ever_saw_large_shoe:
-                            print("[AutoController] 🎯 Prerequisite fulfilled: Large shoe detected in camera frame!")
-                            self.ever_saw_large_shoe = True
+            disable_obstacle_avoidance = (target is not None) or self.ever_saw_large_shoe
 
-                # B) 撞擊有效性判斷：必須滿足【曾經出現過大鞋子 (ever_saw_large_shoe == True)】，碰撞 B1 才有效！
-                if self.ever_saw_large_shoe and bumper_pressed:
-                    self._transition("HIT_SHOE", now, "👟 Shoe collision valid! (Prerequisite large shoe seen & B1 bumper pressed) -> Holding 5s.")
-                    self.command = (0, 0)
-                    return self.command
+            # A) 檢測鏡頭中是否出現過大鞋子（先決條件標誌位）
+            if target is not None:
+                h_ratio = target.get("height_ratio", 0.0)
+                w_ratio = target.get("width_ratio", 0.0)
+                if h_ratio >= 0.35 or (w_ratio * h_ratio) >= 0.12:
+                    if not self.ever_saw_large_shoe:
+                        print("[AutoController] 🎯 Large shoe detected in camera frame! Prerequisite fulfilled -> Disabling obstacle avoidance.")
+                        self.ever_saw_large_shoe = True
 
-                # C) 若 YOLO 有檢測到鞋子目標，執行 ShoeTracker 追蹤
+            # B) 撞擊有效性判斷：必須滿足【曾經出現過大鞋子 (ever_saw_large_shoe == True)】，碰撞 B1 才有效！
+            if self.ever_saw_large_shoe and bumper_pressed:
+                self._transition("HIT_SHOE", now, "👟 Shoe collision valid! (Prerequisite large shoe seen & B1 bumper pressed) -> Holding 5s.")
+                self.command = (0, 0)
+                return self.command
+
+            # C) 若關閉避障（視野有鞋子 或 已看見大鞋子標誌位）：無視超聲波障礙物，專注衝刺追蹤鞋子直到撞擊目標
+            if disable_obstacle_avoidance:
                 if target is not None:
                     cmd, track_reason = self.shoe_tracker.tick(target, distance)
                     self.command = cmd
-                    self.reason = f"[Large Shoe Seen: {self.ever_saw_large_shoe}] {track_reason}"
+                    self.reason = f"[No-Obstacle Pursuit | Large Shoe Seen: {self.ever_saw_large_shoe}] {track_reason}"
+                    return self.command
+                else:
+                    # 標誌位已觸發但視野暫時無目標：全速直向前進 (165, 165)，不避障直到撞擊目標
+                    cmd = (165, 165)
+                    self.command = cmd
+                    self.reason = f"Seeking target (No Obstacle Avoidance | Large Shoe Seen: {self.ever_saw_large_shoe}): Driving forward"
                     return self.command
 
-                # D) 追蹤模式下若暫時無目標，邊漫遊避障尋找鞋子
-                cmd, wander_reason = self.pet_wander.tick(distance)
-                self.command = cmd
-                self.reason = f"Seeking shoe (AUTO tracking, Large Shoe Seen: {self.ever_saw_large_shoe}): {wander_reason}"
-                return self.command
-
             # -------------------------------------------------------------
-            # 3. 普通 IDLE 隨機漫遊狀態 (AUTO 模式)
+            # 3. 默認避障狀態 (視野無鞋子且未觸發大鞋子標誌位，執行 65cm 超聲波自動避障)
             # -------------------------------------------------------------
             cmd, wander_reason = self.pet_wander.tick(distance)
             self.command = cmd
-            self.reason = wander_reason
+            self.reason = f"[Default Obstacle Avoidance Active] {wander_reason}"
             return self.command
 
     def get_status(self):
