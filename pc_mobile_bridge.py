@@ -641,7 +641,10 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         now = time.monotonic()
         top_name = ALL_CLASS_NAMES.get(top_class, f"class_{top_class}")
 
-        if alarm_sum >= 0.15 and alarm_sum >= doorbell_sum:
+        # Classification decision based on CUMULATIVE CONFIDENCE SUMS:
+        # ALARM threshold slightly higher (0.25) to prevent false positives from background noise
+        # DOORBELL threshold lower (0.12) so chimes/ringtones trigger easily
+        if alarm_sum >= 0.25 and alarm_sum >= doorbell_sum:
             name = top_alarm[0]
             score = alarm_sum
             latest_audio_status["category"] = "ALARM"
@@ -655,7 +658,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                 last_trigger_time = now
                 send_event_to_pi(name, score)
 
-        elif doorbell_sum >= 0.15:
+        elif doorbell_sum >= 0.12:
             name = top_doorbell[0]
             score = doorbell_sum
             latest_audio_status["category"] = "DOORBELL"
