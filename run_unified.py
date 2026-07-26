@@ -121,10 +121,10 @@ def main():
     t2.start()
     procs.append(p2)
 
-    # Node 3: Python YAMNet Classifier
-    cmd_yamnet = [py_exe, os.path.join(BASE_DIR, "pc_audio_client.py"), "--pi-host", args.pi_host]
+    # Node 3: Pure YAMNet Doorbell & Bell Classifier (No bandpass filter, raw audio)
+    cmd_yamnet = [py_exe, os.path.join(BASE_DIR, "test_yamnet_bell.py"), "--pi-host", args.pi_host]
     p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
-    t3 = threading.Thread(target=stream_output, args=(p3, "YAMNet", COLOR_YAMNET), daemon=True)
+    t3 = threading.Thread(target=stream_output, args=(p3, "YAMNet-Bell", COLOR_YAMNET), daemon=True)
     t3.start()
     procs.append(p3)
 
