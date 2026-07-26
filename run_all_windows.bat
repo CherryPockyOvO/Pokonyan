@@ -5,22 +5,20 @@ set "PI_HOST=100.80.242.72"
 if not "%~1"=="" set "PI_HOST=%~1"
 
 echo ==========================================================
-echo  Launching Pokonyan Full System (Raspberry Pi + C++ GPU STT + Python YAMNet)
+echo  Pokonyan Single-Window Launcher Option
 echo ==========================================================
 echo Target Pi Host: %PI_HOST%
 echo.
 
-echo [1/3] Starting Raspberry Pi 5 Top Node via SSH...
-start "Pokonyan - Raspberry Pi Remote Node" cmd /k "call run_remote_pi.bat %PI_HOST%"
+rem Check if Windows Terminal (wt.exe) is available
+where wt.exe >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo [Info] Launching Windows Terminal with 3 Split Panes in ONE Window...
+    wt -M -d "%~dp0" --title "🤖 Raspberry Pi" cmd /k "call run_remote_pi.bat %PI_HOST%" ; split-pane -H -d "%~dp0cpp_audio_client" --title "⚡ C++ GPU STT" cmd /k "call build_and_run.bat %PI_HOST%" ; split-pane -V -d "%~dp0" --title "🔔 YAMNet" cmd /k "python pc_audio_client.py --pi-host %PI_HOST%"
+    exit /b 0
+)
 
-echo [2/3] Starting Windows C++ GPU Speech STT Client...
-start "Pokonyan - Windows C++ GPU STT Client" cmd /k "cd cpp_audio_client && call build_and_run.bat %PI_HOST%"
+echo [Info] Running in Single Unified Terminal Mode...
+python run_unified.py --pi-host %PI_HOST%
 
-echo [3/3] Starting Windows Python YAMNet Sound Classifier...
-start "Pokonyan - Python YAMNet Sound Classifier" cmd /k "python pc_audio_client.py --pi-host %PI_HOST%"
-
-echo.
-echo All 3 nodes launched! Check the three open terminal windows.
-echo Raspberry Pi Web UI: http://%PI_HOST%:8080/
-echo.
 pause
