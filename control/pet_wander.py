@@ -101,7 +101,7 @@ class PetWanderController:
             self.action_until = 0.0
             self.reason = "Pet wander reset"
 
-    def tick(self, distance_cm):
+    def tick(self, distance_cm, max_straight_speed=None):
         """核心漫遊與自動避障週期函數。"""
         now = time.monotonic()
         with self.lock:
@@ -146,7 +146,13 @@ class PetWanderController:
             if now >= self.action_until:
                 self._pick_next_action(now)
 
-            return self.current_cmd, self.reason
+            cmd = self.current_cmd
+            if max_straight_speed is not None and cmd[0] > 0 and cmd[1] > 0:
+                l = min(cmd[0], max_straight_speed)
+                r = min(cmd[1], max_straight_speed)
+                cmd = (l, r)
+
+            return cmd, self.reason
 
     @property
     def command(self):

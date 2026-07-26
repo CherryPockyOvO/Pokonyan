@@ -134,10 +134,10 @@ class AutoController:
                     self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
                 else:
-                    # 追蹤中暫時沒看到鞋子：慢速前進尋找 (150, 150)
-                    cmd = (150, 150)
+                    # 追蹤中暫時沒看到鞋子：執行適當的原地旋轉與組合鍵尋找 (直行上限限制為 150)
+                    cmd, search_reason = self.pet_wander.tick(distance, max_straight_speed=150)
                     self.command = cmd
-                    self.reason = "Seeking shoe target: Slow forward searching (150, 150), looking for shoe"
+                    self.reason = f"[Seeking Shoe (150 Max)] {search_reason}"
                     return self.command
 
             # -------------------------------------------------------------
