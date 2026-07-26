@@ -342,6 +342,9 @@ def main():
             target = None if detector is None else detector.get_target(max_age=0.5)
             motor_stat = motor.get_status()
             command = manager.tick(target, motor_stat)
+            motor.set_target(*command)
+            current = manager.get_status()
+
             # 每一個 Tick 即時檢查任務完成復位狀態
             if manager.auto_ctrl.alert == "":
                 if status_category != "NORMAL":
