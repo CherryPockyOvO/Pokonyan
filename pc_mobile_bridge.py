@@ -72,6 +72,17 @@ phone_connected_event = threading.Event()
 PI_HOST = "100.80.242.72"
 PI_PORT = 8080
 
+latest_audio_status = {
+    "category": "NORMAL",
+    "alarm_event": "",
+    "alarm_score": 0.0,
+    "event": "-",
+    "event_score": 0.0,
+    "text": "-",
+    "live_text": "-",
+    "last_event_time": 0.0
+}
+
 def is_phone_connected():
     return phone_connected_event.is_set()
 
@@ -388,18 +399,25 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                     pass
                 return
 
-        # Reverse Proxy: Robot Status JSON
+        # Status JSON with real-time port 5000 audio status sync
         if self.path == "/status":
+            robot_data = {"mode": "AUTO"}
             url = f"http://{PI_HOST}:{PI_PORT}/status"
             try:
-                with urllib.request.urlopen(url, timeout=2.0) as resp:
-                    data = resp.read()
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(data)
-            except Exception as e:
-                self.send_error(502, f"Proxy Status Error: {e}")
+                with urllib.request.urlopen(url, timeout=1.0) as resp:
+                    res_json = json.loads(resp.read().decode("utf-8"))
+                    robot_data = res_json.get("robot", robot_data)
+            except Exception:
+                pass
+
+            combined_status = {
+                "audio": latest_audio_status,
+                "robot": robot_data
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(combined_status).encode("utf-8"))
             return
 
         self.send_error(404)
@@ -467,6 +485,7 @@ def run_mobile_stt(pi_host, pi_port):
             text = text.strip()
             if text and text != last_live_text:
                 last_live_text = text
+                latest_audio_status["live_text"] = text
                 print(f"\r💬 [Mobile STT Live Draft] {text}                       ", end="", flush=True)
                 send_transcript_to_pi(pi_host, pi_port, text, is_live=True)
 
@@ -477,6 +496,8 @@ def run_mobile_stt(pi_host, pi_port):
                 return
             sentence_count += 1
             last_live_text = ""
+            latest_audio_status["text"] = text
+            latest_audio_status["live_text"] = ""
             print(f"\n✅ [Mobile STT Final #{sentence_count}] {text}")
             send_transcript_to_pi(pi_host, pi_port, text, is_live=False)
 
@@ -574,6 +595,12 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         if alarm_hits:
             alarm_hits.sort(key=lambda x: x[1], reverse=True)
             name, score = alarm_hits[0]
+            latest_audio_status["category"] = "ALARM"
+            latest_audio_status["alarm_event"] = name
+            latest_audio_status["alarm_score"] = float(score)
+            latest_audio_status["event"] = name
+            latest_audio_status["event_score"] = float(score)
+            latest_audio_status["last_event_time"] = now
             print(f"\r🚨 [Mobile Mic -> YAMNet ALARM] {name} ({score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
@@ -582,6 +609,12 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
         elif doorbell_hits:
             doorbell_hits.sort(key=lambda x: x[1], reverse=True)
             name, score = doorbell_hits[0]
+            latest_audio_status["category"] = "DOORBELL"
+            latest_audio_status["alarm_event"] = name
+            latest_audio_status["alarm_score"] = float(score)
+            latest_audio_status["event"] = name
+            latest_audio_status["event_score"] = float(score)
+            latest_audio_status["last_event_time"] = now
             print(f"\r🔔 [Mobile Mic -> YAMNet DOORBELL] {name} ({score:.2f})       ", end="", flush=True)
             if now - last_trigger_time >= 0.4:
                 last_trigger_time = now
@@ -589,10 +622,18 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
 
         else:
             if top_score >= 0.15:
+                latest_audio_status["event"] = top_name
+                latest_audio_status["event_score"] = float(top_score)
                 print(f"\r🎵 [Mobile Mic -> YAMNet Live] {top_name} ({top_score:.2f})       ", end="", flush=True)
                 if now - last_trigger_time >= 0.4:
                     last_trigger_time = now
                     send_event_to_pi(top_name, top_score)
+
+        if latest_audio_status.get("category") != "NORMAL":
+            if now - latest_audio_status.get("last_event_time", 0.0) >= 5.0:
+                latest_audio_status["category"] = "NORMAL"
+                latest_audio_status["alarm_event"] = ""
+                latest_audio_status["alarm_score"] = 0.0
 
 def ensure_ssl_cert(cert_file="cert.pem", key_file="key.pem"):
     if os.path.exists(cert_file) and os.path.exists(key_file):
