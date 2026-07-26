@@ -79,6 +79,12 @@ def run_ssh_paramiko(host, user, password, command, prefix, color, stop_event):
         except Exception:
             pass
 
+def get_audio_python():
+    conda_audio_py = r"D:\Z-Anaconda3\envs\audio\python.exe"
+    if os.path.exists(conda_audio_py):
+        return conda_audio_py
+    return sys.executable
+
 def main():
     parser = argparse.ArgumentParser(description="Pokonyan Single-Terminal Unified Launcher with SSH Auto-Login")
     parser.add_argument("--pi-host", default="100.80.242.72", help="Raspberry Pi IP (default: 100.80.242.72)")
@@ -86,11 +92,14 @@ def main():
     parser.add_argument("--pi-pass", default="123456", help="Raspberry Pi SSH password (default: 123456)")
     args = parser.parse_args()
 
+    py_exe = get_audio_python()
+
     print(f"{COLOR_SYS}========================================================{COLOR_RESET}")
     print(f"{COLOR_SYS} Pokonyan Single-Terminal Dashboard (Auto-Login SSH)  {COLOR_RESET}")
     print(f"{COLOR_SYS}========================================================{COLOR_RESET}")
     print(f"Target Raspberry Pi: http://{args.pi_host}:8080/")
     print(f"SSH Auto-Login    : {args.pi_user}@{args.pi_host} (Password: {args.pi_pass})")
+    print(f"Python Env        : {py_exe}")
     print(f"All 3 nodes running in this SINGLE terminal window!\n")
 
     cpp_dir = os.path.join(BASE_DIR, "cpp_audio_client")
@@ -106,14 +115,14 @@ def main():
     t1.start()
 
     # Node 2: RealtimeSTT CUDA GPU Speech Client (Dual-Model Refinement: tiny.en + small.en)
-    cmd_stt = [sys.executable, os.path.join(BASE_DIR, "pc_stt_client.py"), "--pi-host", args.pi_host]
+    cmd_stt = [py_exe, os.path.join(BASE_DIR, "pc_stt_client.py"), "--pi-host", args.pi_host]
     p2 = subprocess.Popen(cmd_stt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
     t2 = threading.Thread(target=stream_output, args=(p2, "RealtimeSTT", COLOR_CPP), daemon=True)
     t2.start()
     procs.append(p2)
 
     # Node 3: Python YAMNet Classifier
-    cmd_yamnet = [sys.executable, os.path.join(BASE_DIR, "pc_audio_client.py"), "--pi-host", args.pi_host]
+    cmd_yamnet = [py_exe, os.path.join(BASE_DIR, "pc_audio_client.py"), "--pi-host", args.pi_host]
     p3 = subprocess.Popen(cmd_yamnet, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, bufsize=0, cwd=BASE_DIR)
     t3 = threading.Thread(target=stream_output, args=(p3, "YAMNet", COLOR_YAMNET), daemon=True)
     t3.start()
