@@ -138,7 +138,7 @@ class AutoController:
                     self.reason = f"[Pursuing Shoe] {track_reason}"
                     return self.command
 
-                # C) 沒看到鞋子，且尚未完成 6 次步進旋轉掃描：執行 6 次步進旋轉（每次轉 0.15s -> 原地停止 0.8s 讀幀）
+                # C) 沒看到鞋子，且尚未完成 6 次步進旋轉掃描：執行 6 次步進旋轉（每次轉動 0.5s -> 原地停止 1.0s 讀幀）
                 if self.scan_steps < 6 and self.scan_state != "DONE":
                     if self.scan_state == "SPINNING":
                         if now < self.scan_until:
@@ -146,15 +146,15 @@ class AutoController:
                             return self.command
                         else:
                             self.scan_state = "PAUSING"
-                            self.pause_until = now + 0.8  # 轉動後停止 0.8 秒
+                            self.pause_until = now + 1.0  # 轉動後停止 1.0 秒
                             self.command = (0, 0)
-                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 1.0s to inspect frame"
                             return self.command
 
                     if self.scan_state == "PAUSING":
                         if now < self.pause_until:
                             self.command = (0, 0)
-                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 0.8s to inspect frame"
+                            self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6 complete -> Pausing 1.0s to inspect frame"
                             return self.command
                         else:
                             self.scan_state = "IDLE"
@@ -163,9 +163,9 @@ class AutoController:
                     self.scan_steps += 1
                     self.scan_state = "SPINNING"
                     self.scan_cmd = (-240, 240)
-                    self.scan_until = now + 0.15
+                    self.scan_until = now + 0.5  # 每次轉動 0.5 秒
                     self.command = self.scan_cmd
-                    self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6: Spinning (-240, 240) 0.15s -> Will pause 0.8s"
+                    self.reason = f"🔍 Initial Scan Step {self.scan_steps}/6: Spinning (-240, 240) 0.5s -> Will pause 1.0s"
                     return self.command
 
                 # D) 6 次步進旋轉掃描完成仍未發現鞋子：開始漫遊尋找鞋子 (直行上限 150)
