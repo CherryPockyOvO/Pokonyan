@@ -492,10 +492,15 @@ def main():
     print(f" 📱 Pokonyan Mobile Mic & Control Bridge Server Started!")
     print(f"========================================================")
     print(f"📡 Target Pi: http://{args.pi_host}:{args.pi_port}/")
-    print(f"🌐 iPhone Safari URLs (Try in order on iPhone 17 Pro Max):")
+    print(f"🌐 iPhone Safari 連線網址指引:")
     for ip in ips:
-        print(f"   👉 {protocol}://{ip}:{args.port}/")
-    print(f"🎙️ Open {protocol}:// in Safari on iPhone 17 Pro Max to grant mic!\n")
+        if ip.startswith("100."):
+            print(f"   👉 {protocol}://{ip}:{args.port}/   ⭐【首選推薦】(Tailscale 虛擬網段 IP)")
+        elif ip.startswith("10.") or ip.startswith("192.168."):
+            print(f"   👉 {protocol}://{ip}:{args.port}/   🏠 (局域網實體 Wi-Fi IP)")
+        else:
+            print(f"   👉 {protocol}://{ip}:{args.port}/")
+    print(f"🎙️ 請在 iPhone 17 Pro Max 的 Safari 中開啟 ⭐【首選推薦】網址！\n")
 
     try:
         server.serve_forever()
