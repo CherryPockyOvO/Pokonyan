@@ -425,7 +425,17 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                     pass
                 return
 
-        # 4. Windows Local Status JSON (100% Instant, 0ms Latency)
+        # 4. Windows Local Status JSON & Reset Endpoints
+        if self.path == "/reset_audio_status":
+            latest_audio_status["category"] = "NORMAL"
+            latest_audio_status["alarm_event"] = ""
+            latest_audio_status["alarm_score"] = 0.0
+            latest_audio_status["event"] = "-"
+            latest_audio_status["event_score"] = 0.0
+            print("\n🟢 [Port 5000 Bridge] Web UI status reset to NORMAL")
+            self.send_json({"ok": True, "category": "NORMAL"})
+            return
+
         if self.path == "/status":
             self.send_json({
                 "audio": latest_audio_status,
@@ -650,7 +660,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
 
         # Classification decision based on CUMULATIVE CONFIDENCE SUMS:
         # ALARM threshold set to 0.50 to prevent false positives from background noise
-        # DOORBELL threshold set to 0.25 to prevent environmental false alarms
+        # DOORBELL threshold set to 0.20 as requested
         if alarm_sum >= 0.50 and alarm_sum >= doorbell_sum:
             name = top_alarm[0]
             score = alarm_sum
@@ -665,7 +675,7 @@ def run_mobile_yamnet(pi_host, pi_port, model_path, threshold):
                 last_trigger_time = now
                 send_event_to_pi(name, score)
 
-        elif doorbell_sum >= 0.25:
+        elif doorbell_sum >= 0.20:
             name = top_doorbell[0]
             score = doorbell_sum
             latest_audio_status["category"] = "DOORBELL"
