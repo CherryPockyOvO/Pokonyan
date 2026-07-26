@@ -106,19 +106,19 @@ class AutoController:
             bumper_pressed = motor_status.get("bumper_pressed", False)  # True if B1, False if B0
 
             # -------------------------------------------------------------
-            # 1. 撞到鞋子狀態 (HIT_SHOE): 保持停留 2 秒後重新啟動
+            # 1. 撞到鞋子狀態 (HIT_SHOE): 先左轉 3 秒，再原地停止，然後重新啟動
             # -------------------------------------------------------------
             if self.state == "HIT_SHOE":
-                if elapsed < 2.0:
-                    remaining = 2.0 - elapsed
-                    self.command = (0, 0)
-                    self.reason = f"👟 Valid shoe hit! Holding position 2s ({remaining:.1f}s remaining)..."
+                if elapsed < 3.0:
+                    remaining = 3.0 - elapsed
+                    self.command = (-240, 240)
+                    self.reason = f"👟 Shoe hit! Turning left 3s ({remaining:.1f}s remaining)..."
                     return self.command
                 else:
-                    # 2 秒時間到：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL，重新啟動
+                    # 3 秒左轉完成：重置回 IDLE 隨機漫遊，清除聲響警報恢復 NORMAL，原地停止
                     self.alert = ""
                     self.alert_score = 0.0
-                    self._transition("IDLE", now, "2s shoe hold complete -> Resuming ordinary AUTO wander")
+                    self._transition("IDLE", now, "3s left turn after shoe hit complete -> Resuming ordinary AUTO wander")
                     self.pet_wander.reset()
                     self.shoe_tracker.reset()
                     return (0, 0)
