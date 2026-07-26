@@ -54,16 +54,16 @@ class PetWanderController:
                 "name": "Forward-Right (WD: 220, 80)",
             },
             "A": {
-                "pwm": (-200, 200),       # 強力原地左轉 (-200, 200)
+                "pwm": (-240, 240),       # 強力原地左轉 (-240, 240)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Left (A: -200, 200)",
+                "name": "Turn-Left (A: -240, 240)",
             },
             "D": {
-                "pwm": (200, -200),       # 強力原地右轉 (200, -200)
+                "pwm": (240, -240),       # 強力原地右轉 (240, -240)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Right (D: 200, -200)",
+                "name": "Turn-Right (D: 240, -240)",
             },
             "B": {
                 "pwm": (0, 0),
@@ -131,11 +131,11 @@ class PetWanderController:
                     self._pick_next_action(now)
                 else:
                     if self.avoid_direction == "A":
-                        self.current_cmd = (-200, 200)
-                        dir_str = "Spin Left (A: -200, 200)"
+                        self.current_cmd = (-240, 240)
+                        dir_str = "Spin Left (A: -240, 240)"
                     else:
-                        self.current_cmd = (200, -200)
-                        dir_str = "Spin Right (D: 200, -200)"
+                        self.current_cmd = (240, -240)
+                        dir_str = "Spin Right (D: 240, -240)"
                     dist_str = f"{distance_cm:.1f}cm" if distance_cm is not None else "N/A"
                     self.reason = f"🚨 Obstacle ({dist_str} <= {self.obstacle_dist_cm}cm) -> Evading: {dir_str}"
                     return self.current_cmd, self.reason

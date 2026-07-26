@@ -41,11 +41,11 @@ class ManualController:
                 self.command = (-200, -200)       # 直線後退 (-200, -200)
                 self.reason = "manual backward (S: -200, -200)"
             elif cmd in ("A", "LEFT"):
-                self.command = (-200, 200)        # 原地左轉 (-200, 200)
-                self.reason = "manual turn left (A: -200, 200)"
+                self.command = (-240, 240)        # 原地左轉 (-240, 240)
+                self.reason = "manual turn left (A: -240, 240)"
             elif cmd in ("D", "RIGHT"):
-                self.command = (200, -200)        # 原地右轉 (200, -200)
-                self.reason = "manual turn right (D: 200, -200)"
+                self.command = (240, -240)        # 原地右轉 (240, -240)
+                self.reason = "manual turn right (D: 240, -240)"
             elif cmd in ("B", "STOP", "BRAKE"):
                 self.command = (0, 0)
                 self.reason = "manual brake (B: 0, 0)"
