@@ -158,5 +158,4 @@ class AutoController:
                 "scan_steps": self.scan_steps,
                 "command_left": self.command[0],
                 "command_right": self.command[1],
-                "shoe_tracking_enabled": self.shoe_tracking_enabled,
             }
