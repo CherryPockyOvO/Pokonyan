@@ -59,7 +59,12 @@ class RobotDualModeManager:
 
     def set_shoe_tracking(self, enabled):
         with self.lock:
-            return self.auto_ctrl.set_shoe_tracking(enabled)
+            res = self.auto_ctrl.set_shoe_tracking(enabled)
+            if enabled and self.mode != "AUTO":
+                print("[Top] 👟 用戶開啟拖鞋追蹤 -> 自動將機器人模式切換為 🤖 AUTO 模式")
+                self.mode = "AUTO"
+                self.manual_ctrl.emergency_stop()
+            return res
 
     def handle_manual_command(self, cmd):
         if self.mode != "MANUAL":
@@ -69,7 +74,7 @@ class RobotDualModeManager:
     def trigger_alarm(self, event, score):
         with self.lock:
             if self.mode != "AUTO":
-                print(f"[Top] Ignored audio event {event}: robot is in MANUAL mode")
+                print(f"[Top] ⚠️ 收到聲響 '{event}' 但當前處於 🎮 MANUAL 手動模式 -> 忽略追蹤行駛 (按鈕或語音切換為 AUTO 即可啟動)")
                 return False
             return self.auto_ctrl.trigger(event, score)
 
@@ -172,11 +177,8 @@ def main():
             alarm_score = score
             alarm_ts = now
             print(f"[Top <- YAMNet] 🚨 [ALARM DETECTED]: '{event}' ({score:.2f})")
-            if system_ready():
-                accepted = manager.trigger_alarm(event, score)
-                print(f"[Top] 警報覆蓋重置任務: {accepted}")
-            else:
-                print("[Top] 任務忽略: 鏡頭或 Arduino 未就緒")
+            accepted = manager.trigger_alarm(event, score)
+            print(f"[Top] 警報觸發/重置任務狀態: accepted={accepted}")
         elif is_doorbell:
             # 🔔 DOORBELL 僅在 NORMAL 或 DOORBELL 時覆蓋；絕不降級正在進行中的高優先級 ALARM
             if current_cat != "ALARM":
@@ -185,11 +187,8 @@ def main():
                 alarm_score = score
                 alarm_ts = now
                 print(f"[Top <- YAMNet] 🔔 [DOORBELL DETECTED]: '{event}' ({score:.2f})")
-                if system_ready():
-                    accepted = manager.trigger_alarm(event, score)
-                    print(f"[Top] 門鈴覆蓋重置任務: {accepted}")
-                else:
-                    print("[Top] 任務忽略: 鏡頭或 Arduino 未就緒")
+                accepted = manager.trigger_alarm(event, score)
+                print(f"[Top] 門鈴觸發/重置任務狀態: accepted={accepted}")
             else:
                 print(f"[Top <- YAMNet] 🔔 收到門鈴 '{event}'，但當前處於高優先級 ALARM 狀態 -> 保持 ALARM 優先")
         else:

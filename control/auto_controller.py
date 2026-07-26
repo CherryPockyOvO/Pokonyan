@@ -50,9 +50,15 @@ class AutoController:
     def set_shoe_tracking(self, enabled):
         with self.lock:
             self.shoe_tracking_enabled = bool(enabled)
-            print(f"[AutoController] 👟 拖鞋追蹤功能開關變更: {self.shoe_tracking_enabled}")
-            if not self.shoe_tracking_enabled and self.state == "TRACKING_SHOE":
-                self.reset()
+            print(f"[AutoController] 👟 拖鞋追蹤功能開關切換 -> enabled={self.shoe_tracking_enabled}")
+            # 切換開關時重置為乾淨 IDLE 狀態，清空先決條件位，準備接收下一次聲響任務
+            self.alert = ""
+            self.alert_score = 0.0
+            self.ever_saw_large_shoe = False
+            self.pet_wander.reset()
+            self.shoe_tracker.reset()
+            if self.state != "IDLE":
+                self._transition("IDLE", time.monotonic(), f"Shoe tracking switch set to {self.shoe_tracking_enabled} -> Reset to IDLE")
             return self.shoe_tracking_enabled
 
     def _transition(self, state, now, reason):
