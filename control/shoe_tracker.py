@@ -135,14 +135,14 @@ class ShoeTrackerController:
                 return cmd, self.reason
 
             if dx < -90.0:
-                cmd = (-175, 180)
-                act_name = "Step Spin Left (-175, 180)"
+                cmd = (-200, 200)
+                act_name = "Step Spin Left (-200, 200)"
             elif dx < -self.deadband_px:
                 cmd = (80, 220)
                 act_name = "Step Curve Left (80, 220)"
             elif dx > 90.0:
-                cmd = (180, -175)
-                act_name = "Step Spin Right (180, -175)"
+                cmd = (200, -200)
+                act_name = "Step Spin Right (200, -200)"
             else:
                 cmd = (220, 80)
                 act_name = "Step Curve Right (220, 80)"

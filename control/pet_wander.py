@@ -54,16 +54,16 @@ class PetWanderController:
                 "name": "Forward-Right (WD: 220, 80)",
             },
             "A": {
-                "pwm": (-175, 180),       # 強力原地左轉 (-175, 180)
+                "pwm": (-200, 200),       # 強力原地左轉 (-200, 200)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Left (A: -175, 180)",
+                "name": "Turn-Left (A: -200, 200)",
             },
             "D": {
-                "pwm": (180, -175),       # 強力原地右轉 (180, -175)
+                "pwm": (200, -200),       # 強力原地右轉 (200, -200)
                 "duration": (0.5, 1.2),
                 "weight": 8,
-                "name": "Turn-Right (D: 180, -175)",
+                "name": "Turn-Right (D: 200, -200)",
             },
             "B": {
                 "pwm": (0, 0),
@@ -90,7 +90,7 @@ class PetWanderController:
         self.current_action = chosen
         self.current_cmd = act_info["pwm"]
         self.action_until = now + dur
-        self.reason = f"Pet wandering: {act_info['name']} for {dur:.1f}s"
+        self.reason = f"Wandering: {act_info['name']} for {dur:.1f}s"
 
     def reset(self):
         """重置漫遊控制器。"""
@@ -102,7 +102,7 @@ class PetWanderController:
             self.reason = "Pet wander reset"
 
     def tick(self, distance_cm):
-        """核心週期函數：傳入即時超聲波距離，返回馬達速度指令 (pwml, pwmr) 與原因。"""
+        """核心漫遊與自動避障週期函數。"""
         now = time.monotonic()
         with self.lock:
             # 🎯 特判 -1.0 與無效數據：-1.0 表示無障礙物/超出量程/感測器超時
@@ -131,11 +131,11 @@ class PetWanderController:
                     self._pick_next_action(now)
                 else:
                     if self.avoid_direction == "A":
-                        self.current_cmd = (-175, 180)
-                        dir_str = "Spin Left (A: -175, 180)"
+                        self.current_cmd = (-200, 200)
+                        dir_str = "Spin Left (A: -200, 200)"
                     else:
-                        self.current_cmd = (180, -175)
-                        dir_str = "Spin Right (D: 180, -175)"
+                        self.current_cmd = (200, -200)
+                        dir_str = "Spin Right (D: 200, -200)"
                     dist_str = f"{distance_cm:.1f}cm" if distance_cm is not None else "N/A"
                     self.reason = f"🚨 Obstacle ({dist_str} <= {self.obstacle_dist_cm}cm) -> Evading: {dir_str}"
                     return self.current_cmd, self.reason
