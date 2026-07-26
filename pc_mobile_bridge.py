@@ -367,24 +367,40 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def send_html(self, html_content):
+        body = html_content.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
+
+    def send_json(self, data_dict):
+        body = json.dumps(data_dict).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
+
     def do_GET(self):
         # 1. 專門車載展示頁面 (/display)
         if self.path == "/display":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(DISPLAY_HTML.encode("utf-8"))
+            self.send_html(DISPLAY_HTML)
             return
 
         # 2. 超簡潔麥克風串流頁面 (/)
         if self.path == "/" or self.path.startswith("/mic"):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(MIC_HTML.encode("utf-8"))
+            self.send_html(MIC_HTML)
             return
 
-        # WebSocket Upgrade
+        # 3. WebSocket Upgrade
         if self.path == "/ws_audio" or self.headers.get("Upgrade", "").lower() == "websocket":
             key = self.headers.get("Sec-WebSocket-Key")
             if key:
@@ -398,7 +414,6 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                 self.send_header("Sec-WebSocket-Accept", accept_key)
                 self.end_headers()
 
-                # Loop reading binary WebSocket frames
                 try:
                     while True:
                         opcode, frame_data = read_ws_frame(self.rfile)
@@ -410,16 +425,12 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
                     pass
                 return
 
-        # Windows Local Status JSON (100% Instant, 0ms Latency)
+        # 4. Windows Local Status JSON (100% Instant, 0ms Latency)
         if self.path == "/status":
-            combined_status = {
+            self.send_json({
                 "audio": latest_audio_status,
                 "robot": {"mode": "AUTO"}
-            }
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(combined_status).encode("utf-8"))
+            })
             return
 
         self.send_error(404)
@@ -441,10 +452,7 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
+            self.send_json({"ok": True})
             return
 
         if self.path == "/trigger_audio_event":
@@ -470,10 +478,7 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
+            self.send_json({"ok": True})
             return
 
         if self.path == "/stream_pcm":
@@ -482,10 +487,7 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             if pcm_bytes:
                 process_audio_payload(pcm_bytes)
             
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
+            self.send_json({"ok": True})
             return
 
         self.send_error(404)
