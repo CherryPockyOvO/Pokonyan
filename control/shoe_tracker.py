@@ -107,7 +107,7 @@ class ShoeTrackerController:
             # 階段 2: 鞋子面積/高度達到 16% (>= 0.16) -> 近距離低速追蹤模式 (不避障，繼續低速逼近)
             # -------------------------------------------------------------
             if shoe_size_ratio >= 0.16:
-                # 步進脈衝狀態機處理 (轉 0.15s -> 停頓 1.0s 讀幀)
+                # 步進脈衝狀態機處理 (轉 0.1s -> 停頓 1.0s 讀幀)
                 if self.pulse_state == "PULSING":
                     if now < self.pulse_until:
                         return self.pulse_cmd, self.reason
@@ -122,8 +122,8 @@ class ShoeTrackerController:
                     else:
                         self.pulse_state = "IDLE"
 
-                # 偏出中心門檻以外：執行原地步進旋轉 (240, -240) / (-240, 240)，旋轉後停頓 1.0 秒
-                if abs(dx) > self.deadband_px:
+                # 嚴重偏出中心 (|dx| > 60px)：原地步進旋轉 0.1s，旋轉後停頓 1.0 秒
+                if abs(dx) > 60:
                     if dx < 0:
                         cmd = (-240, 240)
                         act_name = "In-place Spin Left (-240, 240)"
@@ -133,16 +133,16 @@ class ShoeTrackerController:
 
                     self.pulse_state = "PULSING"
                     self.pulse_cmd = cmd
-                    self.pulse_until = now + self.pulse_duration_sec
+                    self.pulse_until = now + 0.1
                     self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): {act_name} (dx={dx:.1f}) -> Pause 1.0s"
                     return self.pulse_cmd, self.reason
 
-                # 對準中心：執行 (150, 150) 步進直行 0.15s，隨後停頓 1.0 秒供鏡頭重新觀察
+                # 對準中心或輕微偏移 (|dx| <= 60px)：(150, 150) 步進直行 0.1s，停頓 1.0 秒
                 cmd = (150, 150)
                 self.pulse_state = "PULSING"
                 self.pulse_cmd = cmd
-                self.pulse_until = now + self.pulse_duration_sec
-                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Centered -> Step Forward (150, 150) -> Pause 1.0s"
+                self.pulse_until = now + 0.1
+                self.reason = f"🎯 Near Mode (Ratio {shoe_size_ratio*100:.1f}%): Near-centered (dx={dx:.1f}) -> Step Forward (150, 150) -> Pause 1.0s"
                 return self.pulse_cmd, self.reason
 
             # -------------------------------------------------------------
