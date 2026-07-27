@@ -65,8 +65,10 @@ class RobotDualModeManager:
     def trigger_alarm(self, event, score):
         with self.lock:
             if self.mode != "AUTO":
-                print(f"[Top] ⚠️ 收到聲響 '{event}' 但當前處於 🎮 MANUAL 手動模式 -> 忽略追蹤行駛 (按鈕或語音切換為 AUTO 即可啟動)")
-                return False
+                print(f"[Top] 🔄 收到聲響 '{event}' 但當前處於 🎮 MANUAL 手動模式 -> 自動切換為 AUTO 模式並啟動尋鞋任務！")
+                self.mode = "AUTO"
+                self.manual_ctrl.emergency_stop()
+                self.auto_ctrl.reset()
             return self.auto_ctrl.trigger(event, score)
 
     def emergency_stop(self):

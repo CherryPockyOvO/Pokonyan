@@ -96,7 +96,7 @@ MIC_HTML = """<!DOCTYPE html>
 <title>🎙️ Pokonyan iPhone 麥克風串流</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-body { background: #0d1117; color: #c9d1d9; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+body { background: #0d1117; color: #c9d1d9; padding: 24px 16px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 16px; }
 .card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 28px 20px; width: 100%; max-width: 400px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 h1 { font-size: 20px; color: #58a6ff; margin-bottom: 20px; }
 .btn { background: #238636; color: white; border: none; border-radius: 12px; padding: 18px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; transition: all 0.2s ease; }
@@ -106,6 +106,16 @@ h1 { font-size: 20px; color: #58a6ff; margin-bottom: 20px; }
 .link-box { margin-top: 24px; font-size: 13px; }
 .link-box a { color: #58a6ff; text-decoration: none; font-weight: bold; }
 @keyframes pulse { from { opacity: 0.85; } to { opacity: 1.0; } }
+
+/* 模式切換按鈕 */
+.mode-section { margin-top: 0; }
+.mode-section h2 { font-size: 16px; color: #8b949e; margin-bottom: 14px; }
+.mode-btns { display: flex; gap: 12px; }
+.mode-btn { flex: 1; padding: 16px 10px; border-radius: 12px; font-size: 16px; font-weight: bold; border: 2px solid #30363d; background: #21262d; color: #8b949e; cursor: pointer; transition: all 0.2s ease; }
+.mode-btn:active { transform: scale(0.97); }
+.mode-btn.active-auto { background: rgba(35, 134, 54, 0.25); border-color: #238636; color: #3fb950; box-shadow: 0 0 12px rgba(35, 134, 54, 0.3); }
+.mode-btn.active-manual { background: rgba(88, 166, 255, 0.2); border-color: #58a6ff; color: #58a6ff; box-shadow: 0 0 12px rgba(88, 166, 255, 0.3); }
+#mode-status { font-size: 13px; color: #8b949e; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -121,12 +131,73 @@ h1 { font-size: 20px; color: #58a6ff; margin-bottom: 20px; }
   </div>
 </div>
 
+<div class="card mode-section">
+  <h2>🤖 小車模式切換</h2>
+  <div class="mode-btns">
+    <button id="btn-auto" class="mode-btn" onclick="setMode('AUTO')">🤖 AUTO 自動</button>
+    <button id="btn-manual" class="mode-btn" onclick="setMode('MANUAL')">🎮 MANUAL 手動</button>
+  </div>
+  <div id="mode-status">正在獲取當前模式...</div>
+</div>
+
 <script>
 let isMicStreaming = false;
 let audioContext = null;
 let scriptNode = null;
 let mediaStream = null;
 let ws = null;
+let currentMode = 'AUTO';
+
+async function setMode(mode) {
+  try {
+    const piHost = '""" + PI_HOST + """';
+    const piPort = """ + str(PI_PORT) + """;
+    await fetch(`http://${piHost}:${piPort}/set_mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode })
+    });
+    currentMode = mode;
+    updateModeUI();
+  } catch (e) {
+    console.log('Set mode error:', e);
+    document.getElementById('mode-status').textContent = '⚠️ 無法連接 Pi，請確認 Pi 在線';
+    document.getElementById('mode-status').style.color = '#f85149';
+  }
+}
+
+function updateModeUI() {
+  const btnAuto = document.getElementById('btn-auto');
+  const btnManual = document.getElementById('btn-manual');
+  const modeStatus = document.getElementById('mode-status');
+  btnAuto.className = 'mode-btn' + (currentMode === 'AUTO' ? ' active-auto' : '');
+  btnManual.className = 'mode-btn' + (currentMode === 'MANUAL' ? ' active-manual' : '');
+  if (currentMode === 'AUTO') {
+    modeStatus.textContent = '🤖 當前模式：AUTO 自動巡航（聽到鈴聲/警報自動尋鞋）';
+    modeStatus.style.color = '#3fb950';
+  } else {
+    modeStatus.textContent = '🎮 當前模式：MANUAL 手動控制（聽到鈴聲/警報也會自動切為 AUTO 尋鞋）';
+    modeStatus.style.color = '#58a6ff';
+  }
+}
+
+async function pollPiStatus() {
+  try {
+    const piHost = '""" + PI_HOST + """';
+    const piPort = """ + str(PI_PORT) + """;
+    const res = await fetch(`http://${piHost}:${piPort}/status`);
+    if (res.ok) {
+      const data = await res.json();
+      const robotMode = (data.robot && data.robot.mode) || 'AUTO';
+      if (robotMode !== currentMode) {
+        currentMode = robotMode;
+        updateModeUI();
+      }
+    }
+  } catch (e) {}
+}
+setInterval(pollPiStatus, 1000);
+pollPiStatus();
 
 async function toggleMicrophone() {
   const btn = document.getElementById('btn-mic');
