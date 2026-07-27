@@ -150,9 +150,7 @@ let currentMode = 'AUTO';
 
 async function setMode(mode) {
   try {
-    const piHost = '""" + PI_HOST + """';
-    const piPort = """ + str(PI_PORT) + """;
-    await fetch(`http://${piHost}:${piPort}/set_mode`, {
+    await fetch('/set_mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: mode })
@@ -181,11 +179,9 @@ function updateModeUI() {
   }
 }
 
-async function pollPiStatus() {
+async function pollStatus() {
   try {
-    const piHost = '""" + PI_HOST + """';
-    const piPort = """ + str(PI_PORT) + """;
-    const res = await fetch(`http://${piHost}:${piPort}/status`);
+    const res = await fetch('/status');
     if (res.ok) {
       const data = await res.json();
       const robotMode = (data.robot && data.robot.mode) || 'AUTO';
@@ -196,8 +192,8 @@ async function pollPiStatus() {
     }
   } catch (e) {}
 }
-setInterval(pollPiStatus, 1000);
-pollPiStatus();
+setInterval(pollStatus, 1000);
+pollStatus();
 
 async function toggleMicrophone() {
   const btn = document.getElementById('btn-mic');
@@ -507,15 +503,44 @@ class MobileBridgeHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/status":
+            # 代理向 Pi 獲取真實機器人狀態
+            robot_status = {"mode": "AUTO"}
+            try:
+                url = f"http://{PI_HOST}:{PI_PORT}/status"
+                req = urllib.request.Request(url, headers={"User-Agent": "Port5000Proxy"})
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    pi_data = json.loads(resp.read().decode("utf-8"))
+                    robot_status = pi_data.get("robot", robot_status)
+            except Exception:
+                pass
             self.send_json({
                 "audio": latest_audio_status,
-                "robot": {"mode": "MANUAL"}
+                "robot": robot_status
             })
             return
 
         self.send_error(404)
 
     def do_POST(self):
+        if self.path == "/set_mode":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode("utf-8")) if body else {}
+                mode = data.get("mode", "AUTO")
+                # 代理轉發給 Pi
+                url = f"http://{PI_HOST}:{PI_PORT}/set_mode"
+                payload = json.dumps({"mode": mode}).encode("utf-8")
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=2.0):
+                    pass
+                print(f"\n🔄 [Port 5000 Bridge] Mode switch -> {mode} (forwarded to Pi)")
+                self.send_json({"ok": True, "mode": mode})
+            except Exception as e:
+                print(f"\n⚠️ [Port 5000 Bridge] Failed to forward mode to Pi: {e}")
+                self.send_json({"ok": False, "error": str(e)})
+            return
+
         if self.path == "/set_shoe_tracking":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
